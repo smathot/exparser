@@ -181,7 +181,7 @@ class PivotMatrix(BaseMatrix):
 		barSpacing2=.5, barWidth=.75):
 		
 		"""
-		Draws a bar chart
+		Draws a bar chart. Only 1 and 2 factor designs are allowed.
 		
 		Keyword arguments:
 		fig -- an existing matplotlib figure to draw in (default=None)
@@ -189,7 +189,7 @@ class PivotMatrix(BaseMatrix):
 		_dir -- the direction of the bars ('up', 'down', 'left', 'right')
 				(default='right')
 		barSpacing1 -- the small spacing between bars (default=1)
-		barScaping2 -- the extra spacing between groups of bars (default=.5)
+		barSpacing2 -- the extra spacing between groups of bars (default=.5)
 		barWidth -- the width of the bars (default=.75)
 		
 		Returns:
@@ -201,7 +201,7 @@ class PivotMatrix(BaseMatrix):
 			raise Exception('You can only plot 1 or 2 factor PivotMatrices')
 		v1 = self.cols[0]			
 		if len(self.cols) == 1:
-			v2 = None
+			v2 = []
 		else:
 			v2 = self.cols[1]
 		
@@ -221,7 +221,7 @@ class PivotMatrix(BaseMatrix):
 
 				# Create a label for the column
 				l1 = _dm[v1][0]
-				if v2 == None:
+				if v2 == []:
 					xLabel.append(l1)
 				else:
 					l2 = _dm[v2][0]
