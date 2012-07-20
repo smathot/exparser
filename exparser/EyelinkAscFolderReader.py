@@ -26,7 +26,7 @@ import warnings
 class EyelinkAscFolderReader(BaseReader):
 
 	"""Parses Eyelink ASCII data"""
-
+	
 	def __init__(self, path='data', ext='.asc', ignoreBlinks=True, \
 		startTrialKey='start_trial', endTrialKey='stop_trial', \
 		variableKey='var', dtype='|S128', maxN=None):
@@ -62,7 +62,17 @@ class EyelinkAscFolderReader(BaseReader):
 				if self.m == None:
 					self.m = a
 				else:
-					self.m = numpy.concatenate( (self.m, a[1:]), axis=0)
+					try:
+						self.m = numpy.concatenate( (self.m, a[1:]), axis=0)
+					except ValueError as e:
+						print
+						print 'Trying to concatenate'
+						print a[0]
+						print a[1:][-1]
+						print 'to'
+						print self.m[0]
+						print self.m[-1]
+						raise(e)
 				print '(%d trials)' % (a[:,0].size-1)
 				nFile += 1
 			if maxN != None and nFile >= maxN:
@@ -215,7 +225,7 @@ class EyelinkAscFolderReader(BaseReader):
 		"""
 
 		trialDict = {'trialId' : trialId, 'file' : os.path.basename(fd.name), \
-			'outlier' : 0}
+			'outlier' : 0, 'eye_used' : 'undefined'}
 		self.initTrial(trialDict)
 
 		inBlink = False
