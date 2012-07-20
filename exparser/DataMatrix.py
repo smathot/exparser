@@ -229,6 +229,24 @@ class DataMatrix(BaseMatrix):
 			l.append(a.size)
 			m.append(l)
 		return DataMatrix(m)
+		
+	def columns(self, dtype=False):
+	
+		"""
+		Returns a description of the columns
+		
+		Keyword arguments:
+		dtype -- indicates if the datatype for each column should be returned as
+				 well (default=False)
+		
+		Returns:
+		If dtype == False: A list of names
+		If dtype == True: A list of (name, dtype) tuples
+		"""
+		
+		if dtype:
+			return self.m.dtype.descr
+		return list(self.m.dtype.names)
 
 	def group(self, keys):
 
