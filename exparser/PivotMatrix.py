@@ -15,7 +15,7 @@ You should have received a copy of the GNU General Public License
 along with exparser.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-from matplotlib import cm, pyplot
+from matplotlib import cm, pyplot as plt
 import types
 import numpy as np
 from exparser.BaseMatrix import BaseMatrix
@@ -57,13 +57,13 @@ class PivotMatrix(BaseMatrix):
 		self.colsWithin = colsWithin
 
 		# First create a matrix and fill it with data
-		rowGroup = dm.group(rows)
-		self.nRows = len(rowGroup)
+		rowGroup = dm.group(rows)						
+		self.nRows = len(rowGroup)				
 		firstRow = True
 		row = 0
 		nCols = None
 		for dm in rowGroup:
-			colGroup = dm.group(cols)
+			colGroup = dm.group(cols)			
 			self.nCols = len(colGroup)
 			if firstRow:
 				self.m = np.zeros( (self.rowHeaders+len(rowGroup)+2, \
@@ -176,7 +176,97 @@ class PivotMatrix(BaseMatrix):
 		"""
 
 		return self.m
+		
+	def barPlot(self, fig=None, show=False, _dir='up', barSpacing1=1, \
+		barSpacing2=.5, barWidth=.75):
+		
+		"""
+		Draws a bar chart
+		
+		Keyword arguments:
+		fig -- an existing matplotlib figure to draw in (default=None)
+		show -- indicates whether the figure should be shown (default=False)
+		_dir -- the direction of the bars ('up', 'down', 'left', 'right')
+				(default='right')
+		barSpacing1 -- the small spacing between bars (default=1)
+		barScaping2 -- the extra spacing between groups of bars (default=.5)
+		barWidth -- the width of the bars (default=.75)
+		
+		Returns:
+		A matplotlib figure
+		"""
+			
+		# Determine the first (v1) and second (v2) factor
+		if len(self.cols) not in (1, 2):
+			raise Exception('You can only plot 1 or 2 factor PivotMatrices')
+		v1 = self.cols[0]			
+		if len(self.cols) == 1:
+			v2 = None
+		else:
+			v2 = self.cols[1]
+		
+		# Get the mean and error values from the matrix	
+		aMean = np.array(self.m[-2,2:-2], dtype=float)
+		aErr = np.array(self.m[-1,2:-2], dtype=float)
+		
+		xLabel = []
+		xData = []
+		colors = []
+		x = 0
 
+		for dm in self.dm.group(v1):		
+			colNr = -1
+			for _dm in dm.group(v2):			
+				colors.append(Constants.palette[colNr])
+
+				# Create a label for the column
+				l1 = _dm[v1][0]
+				if v2 == None:
+					xLabel.append(l1)
+				else:
+					l2 = _dm[v2][0]
+					xLabel.append('%s, %s' % (l1, l2))
+						
+				# Create an x-coordinate for the column
+				x += barSpacing1
+				xData.append(x)	
+				
+				# Advance to the next column (we are counting downwards because
+				# this value is used to pick the last colours from the palette
+				# list
+				colNr -= 1	
+				
+			# Between conditions there is a gap
+			x += barSpacing2	
+			
+		xData = np.array(xData)	
+		
+		# Optionally create a new figure
+		if fig == None:
+			fig = plt.figure()						
+			
+		if _dir in ('left', 'right'):
+			# Draw a horizontal bar chart
+			plt.barh(xData, aMean, barWidth, xerr=aErr, color=colors, \
+				figure=fig)
+			plt.yticks(xData+barWidth/2, xLabel, figure=fig)		
+			plt.ylim(xData.min()-barSpacing2, xData.max()+barWidth+barSpacing2)			
+			if _dir == 'left':
+					plt.gca().invert_xaxis()				
+		else:		
+			# Draw a vertical (normal) bar chart
+			plt.bar(xData, aMean, barWidth, yerr=aErr, color=colors, figure=fig)
+			plt.xticks(xData+barWidth/2, xLabel, figure=fig)		
+			plt.xlim(xData.min()-barSpacing2, xData.max()+barWidth+barSpacing2)
+			if _dir == 'down':
+				plt.gca().invert_yaxis()
+				
+		# Optionally show the figure
+		if show:
+			plt.show()
+		
+		return fig
+		
 	def plot(self, nLvl1=2, size=(5,4), dpi=90, show=False, errBar=True,
 		lineLabels=None, xTicks=None, xLabel=None, yLabel=None, grid=False, \
 		lineWidth=None, symbols=None, errCap=0, fontFamily='Arial', fontSize=9, \
@@ -221,7 +311,7 @@ class PivotMatrix(BaseMatrix):
 		xTicksFmt
 
 		Returns:
-		A matplotlib.pyplot plot
+		A matplotlib.plt plot
 		"""
 
 		if colors == None:
@@ -236,17 +326,17 @@ class PivotMatrix(BaseMatrix):
 		aStd = np.array(self.m[-1,2:-2], dtype=float)
 		aStd = aStd.reshape(nLvl1, aStd.size/nLvl1)
 
-		pyplot.rc("font", family=Constants.fontFamily)
-		pyplot.rc("font", size=Constants.fontSize)
+		plt.rc("font", family=Constants.fontFamily)
+		plt.rc("font", size=Constants.fontSize)
 
 		if fig == None:
-			fig = pyplot.figure(figsize=size, dpi=dpi)
+			fig = plt.figure(figsize=size, dpi=dpi)
 		
 		if title != None:
-			pyplot.title(title, figure=fig)
+			plt.title(title, figure=fig)
 
 		if grid:
-			pyplot.grid(alpha=0.5)
+			plt.grid(alpha=0.5)
 
 		if dPlot != None:			
 			if len(aMean) != 2:
@@ -273,20 +363,20 @@ class PivotMatrix(BaseMatrix):
 			if xData == None:
 				if xTicks == None:
 					xData = np.linspace(0, 1,  len(yData))
-					pyplot.xlim(-xMargin, 1.+xMargin)
+					plt.xlim(-xMargin, 1.+xMargin)
 				else:
 					if type(xTicks[0]) not in (unicode, str):
 						xData = xTicks
 						m = (max(xTicks) - min(xTicks)) * .05
-						pyplot.xlim(min(xTicks)-m, max(xTicks)+m)
+						plt.xlim(min(xTicks)-m, max(xTicks)+m)
 					else:
 						xData = np.linspace(0, len(xTicks)-1, len(yData))
-						pyplot.xlim(-xMargin, len(xTicks)-(1.-xMargin))
+						plt.xlim(-xMargin, len(xTicks)-(1.-xMargin))
 
 			if plotType == 'line':
 
 				# Draw a line graph
-				pyplot.plot(xData, yData, symbol, figure=fig, label=label, \
+				plt.plot(xData, yData, symbol, figure=fig, label=label, \
 					color=color, linewidth=lineWidth, markerfacecolor='white', \
 					markeredgecolor=color, markeredgewidth=lineWidth)
 
@@ -294,7 +384,7 @@ class PivotMatrix(BaseMatrix):
 
 				# Draw a bar graph
 				xData += i*barWidth - .5*barWidth*len(aMean)
-				pyplot.bar(xData, yData, barWidth, color=color, \
+				plt.bar(xData, yData, barWidth, color=color, \
 					linewidth=lineWidth, edgecolor=barEdgeColor, label=label)
 				xData += .5*barWidth
 
@@ -303,30 +393,30 @@ class PivotMatrix(BaseMatrix):
 				for x,y,err in zip(xData,yData,yErr):
 					if plotType == 'bar':
 						color = barEdgeColor
-					pyplot.errorbar(x, y, err, fmt=None, figure=fig, ecolor=color, \
+					plt.errorbar(x, y, err, fmt=None, figure=fig, ecolor=color, \
 						linewidth=lineWidth, capsize=errCap)
 			i += 1
 
 		if xTicks != None:
 			if type(xTicks[0]) not in (unicode, str):				
-				pyplot.xticks(xTicks, rotation=xTicksRot)
+				plt.xticks(xTicks, rotation=xTicksRot)
 				xTickLabels = [xTicksFmt % x for x in xTicks]
 				xTickVals = xTicks
 			else:
 				xTickVals = np.arange(len(xTicks))
 				xTickLabels = xTicks				
-			pyplot.xticks(xTickVals, xTickLabels, rotation=xTicksRot)
+			plt.xticks(xTickVals, xTickLabels, rotation=xTicksRot)
 			
 		if xLabel != None:
-			pyplot.xlabel(xLabel)
+			plt.xlabel(xLabel)
 		if yLabel != None:
-			pyplot.ylabel(yLabel)
+			plt.ylabel(yLabel)
 		if yLim != None:
-			pyplot.ylim(yLim)
+			plt.ylim(yLim)
 
 		if legendPos != None:
-			pyplot.legend(loc=legendPos, title=legendTitle, frameon=False)
+			plt.legend(loc=legendPos, title=legendTitle, frameon=False)
 		if show:
-			pyplot.show()
+			plt.show()
 		return fig
 

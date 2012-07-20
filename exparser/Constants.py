@@ -17,7 +17,8 @@ along with exparser.  If not, see <http://www.gnu.org/licenses/>.
 
 fontFamily = 'Liberation Sans'
 fontSize = 9
-plotLineColors =  ['#edd400', '#c17d11', '#75507b', '#cc0000', '#73d216', \
-	'#f57900', '#3465a4'] * 10
+palette = ['#edd400', '#c17d11', '#75507b', '#cc0000', '#73d216', \
+	'#f57900', '#3465a4']
+plotLineColors = palette * 10
 plotLineSymbols = ['o-'] * 10
 plotLineWidth = 1

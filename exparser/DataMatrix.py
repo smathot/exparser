@@ -255,12 +255,14 @@ class DataMatrix(BaseMatrix):
 		key variables.
 
 		Arguments:
-		keys -- a list of variable names
+		keys -- a list of variable names, or a single variable name
 
 		Returns:
 		A list of DataMatrices
 		"""
 
+		if type(keys) == str:
+			keys = [keys]
 		if len(keys) == 0:
 			return [self]
 		vName = keys[0]
