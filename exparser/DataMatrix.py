@@ -116,6 +116,27 @@ class DataMatrix(BaseMatrix):
 		"""
 
 		return len(self.m)
+		
+	def __add__(self, dm):
+	
+		"""
+		Concatenates two DataMatrices. Implements the + operator.
+		
+		Arguments:
+		dm -- the DataMatrix to be appended
+
+		Returns:
+		The concatenation of the current and the passed DataMatrix		
+		"""
+		
+		if self.columns() != dm.columns():
+			raise Exception( \
+				'You can only add DataMatrices that have the same columns')
+				
+		_dm = self.clone()
+		for col in self.columns():
+			_dm.m = np.concatenate( (self.m, dm.m) )
+		return _dm		
 
 	def __setitem__(self, vName, vVal):
 
