@@ -26,7 +26,7 @@ class PivotMatrix(BaseMatrix):
 	"""A PivotMatrix 'summary table' based on a DataMatrix"""
 
 	def __init__(self, dm, cols, rows, dv, func='mean()', err='95ci', \
-		colsWithin=False):
+		colsWithin=True):
 
 		"""
 		Constructor. Generates a PivotMatrix that summarizes a SmartArray
@@ -178,7 +178,8 @@ class PivotMatrix(BaseMatrix):
 		return self.m
 		
 	def barPlot(self, fig=None, show=False, _dir='up', barSpacing1=1, \
-		barSpacing2=.5, barWidth=.75):
+		barSpacing2=.5, barWidth=.75, xLabels=None, lLabels=None, xLabelRot=0, \
+		yLim=None, legendPos='best',legendTitle = None, ylabel=None):
 		
 		"""
 		Draws a bar chart. Only 1 and 2 factor designs are allowed.
@@ -187,7 +188,7 @@ class PivotMatrix(BaseMatrix):
 		fig -- an existing matplotlib figure to draw in (default=None)
 		show -- indicates whether the figure should be shown (default=False)
 		_dir -- the direction of the bars ('up', 'down', 'left', 'right')
-				(default='right')
+				(default='up')
 		barSpacing1 -- the small spacing between bars (default=1)
 		barSpacing2 -- the extra spacing between groups of bars (default=.5)
 		barWidth -- the width of the bars (default=.75)
@@ -195,6 +196,10 @@ class PivotMatrix(BaseMatrix):
 		Returns:
 		A matplotlib figure
 		"""
+		
+		# Set font
+		plt.rc("font", family=Constants.fontFamily)
+		plt.rc("font", size=Constants.fontSize)
 			
 		# Determine the first (v1) and second (v2) factor
 		if len(self.cols) not in (1, 2):
@@ -209,35 +214,43 @@ class PivotMatrix(BaseMatrix):
 		aMean = np.array(self.m[-2,2:-2], dtype=float)
 		aErr = np.array(self.m[-1,2:-2], dtype=float)
 		
-		xLabel = []
+		_xLabels = []
+		xVals = []
 		xData = []
 		colors = []
 		x = 0
 
 		for dm in self.dm.group(v1):		
 			colNr = -1
+			
+			# Determine label for column group
+			l1 = str(dm[v1][0][0])
+			_xLabels.append(l1)
+			left = x			
+
+			_lLabels = []			
 			for _dm in dm.group(v2):			
 				colors.append(Constants.palette[colNr])
-
-				# Create a label for the column
-				l1 = _dm[v1][0]
-				if v2 == []:
-					xLabel.append(l1)
-				else:
-					l2 = _dm[v2][0]
-					xLabel.append('%s, %s' % (l1, l2))
 						
 				# Create an x-coordinate for the column
-				x += barSpacing1
-				xData.append(x)	
+				x += barSpacing1 + barWidth
+				xData.append(x)
 				
+				# Get legend labels
+				if v2 != []:
+					l2 = _dm[v2][0][0]
+					_lLabels.append(str(l2))
+								
 				# Advance to the next column (we are counting downwards because
 				# this value is used to pick the last colours from the palette
 				# list
 				colNr -= 1	
 				
+			# Determine postion for label
+			xVals.append( (left+x)/2 + barWidth )
+										
 			# Between conditions there is a gap
-			x += barSpacing2	
+			x += barSpacing2 + barWidth
 			
 		xData = np.array(xData)	
 		
@@ -247,19 +260,65 @@ class PivotMatrix(BaseMatrix):
 			
 		if _dir in ('left', 'right'):
 			# Draw a horizontal bar chart
-			plt.barh(xData, aMean, barWidth, xerr=aErr, color=colors, \
-				figure=fig)
-			plt.yticks(xData+barWidth/2, xLabel, figure=fig)		
-			plt.ylim(xData.min()-barSpacing2, xData.max()+barWidth+barSpacing2)			
-			if _dir == 'left':
-					plt.gca().invert_xaxis()				
+			_bar = plt.barh
+			_ticks = plt.yticks
+			_lim = plt.ylim
+			_vlim = plt.xlim
+			_err = dict(xerr=aErr)
+			_lerr = 'xerr'
 		else:		
 			# Draw a vertical (normal) bar chart
-			plt.bar(xData, aMean, barWidth, yerr=aErr, color=colors, figure=fig)
-			plt.xticks(xData+barWidth/2, xLabel, figure=fig)		
-			plt.xlim(xData.min()-barSpacing2, xData.max()+barWidth+barSpacing2)
-			if _dir == 'down':
-				plt.gca().invert_yaxis()
+			_bar = plt.bar
+			_ticks = plt.xticks
+			_lim = plt.xlim
+			_vlim = plt.ylim
+			_err = dict(yerr=aErr)
+			_lerr = 'yerr'
+				
+		# Use keyword labels if provided
+		if xLabels == None:
+			xLabels = _xLabels
+		if lLabels == None:
+			lLabels = _lLabels
+
+		if lLabels != []:
+		
+			# We need to plot separate bars so that we have labels for the
+			# legend
+			for i in range(len(lLabels)):
+				if i != len(lLabels)-1:
+					_err[_lerr] = aErr[i]
+					_bar(xData[i], aMean[i], barWidth, \
+						color=colors[i], figure=fig, ecolor='black', \
+						capsize=0, label=lLabels[i], **_err)			
+				else:
+					_err[_lerr] = aErr[i:]
+					_bar(xData[i:], aMean[i:], barWidth, \
+						color=colors[i:], figure=fig, ecolor='black', \
+						capsize=0, label=lLabels[i], **_err)
+		else:
+		
+			# Draw without legend labels
+			_bar(xData, aMean, barWidth, color=colors, figure=fig, \
+				ecolor='black', capsize=0, **_err)
+				
+		# Flip axis if necessary
+		if _dir == 'down':
+			plt.gca().invert_yaxis()
+		if _dir == 'left':
+			plt.gca().invert_xaxis()										
+						
+		_ticks(xVals, xLabels, figure=fig, rotation=xLabelRot)		
+		_lim(xData.min()-barSpacing2, xData.max()+barWidth+barSpacing2)
+		if yLim != None:
+			_vlim(yLim)
+		
+		if lLabels != []:
+			if legendPos != None:
+				plt.legend(loc=legendPos, title=legendTitle, frameon=False)
+				
+		if yLabel != None:
+			plt.ylabel(yLabel)
 				
 		# Optionally show the figure
 		if show:
@@ -267,12 +326,143 @@ class PivotMatrix(BaseMatrix):
 		
 		return fig
 		
+	def linePlot(self, fig=None, show=False, _dir='up', spacing=.5, \
+		xLabels=None, lLabels=None, xLabelRot=0, yLim=None, legendPos='best', \
+		legendTitle=None, yLabel=None, xLabel=None):
+				
+		"""
+		Draws a line chart. Only 1 and 2 factor designs are allowed.
+		
+		Keyword arguments:
+		fig -- an existing matplotlib figure to draw in (default=None)
+		show -- indicates whether the figure should be shown (default=False)
+		_dir -- the direction of the bars ('up', 'down') (default='up')
+		
+		Returns:
+		A matplotlib figure
+		"""
+		
+		# Set font
+		plt.rc("font", family=Constants.fontFamily)
+		plt.rc("font", size=Constants.fontSize)
+			
+		# Determine the first (v1) and second (v2) factor
+		if len(self.cols) not in (1, 2):
+			raise Exception('You can only plot 1 or 2 factor PivotMatrices')
+		v1 = self.cols[0]			
+		if len(self.cols) == 1:
+			v2 = []
+		else:
+			v2 = self.cols[1]
+		
+		# Get the mean and error values from the matrix	
+		aMean = np.array(self.m[-2,2:-2], dtype=float)
+		aErr = np.array(self.m[-1,2:-2], dtype=float)
+		
+		_xLabels = []
+		colors = []
+		x = 0
+
+		for dm in self.dm.group(v1):		
+			colNr = -1
+			
+			# Determine label for column group
+#			l1 = str(dm[v1][0][0])
+			l1 = str(dm[v1][0])
+			_xLabels.append(l1)
+			left = x			
+
+			_lLabels = []			
+			for _dm in dm.group(v2):			
+				# Get legend labels
+				if v2 != []:
+#					l2 = _dm[v2][0][0]
+					l2 = _dm[v2][0]
+					_lLabels.append(str(l2))
+										
+		# Optionally create a new figure
+		if fig == None:
+			fig = plt.figure()						
+			
+		if _dir in ('left', 'right'):
+			# Draw a horizontal bar chart
+			_bar = plt.barh
+			_ticks = plt.yticks
+			_lim = plt.ylim
+			_vlim = plt.xlim
+			_err = dict(xerr=aErr)
+			_lerr = 'xerr'
+		else:		
+			# Draw a vertical (normal) bar chart
+			_bar = plt.bar
+			_ticks = plt.xticks
+			_lim = plt.xlim
+			_vlim = plt.ylim
+			_err = dict(yerr=aErr)
+			_lerr = 'yerr'
+				
+		# Use keyword labels if provided
+		if xLabels == None:
+			xLabels = _xLabels
+		if lLabels == None:
+			lLabels = _lLabels
+
+				
+		colors = Constants.plotLineColors[:]
+		fmts = Constants.plotLineSymbols[:]
+		linestyles = Constants.plotLineStyles[:]
+		
+		# Plot multiple lines
+		if lLabels != []:
+			i= 0
+			aMean.resize( (len(lLabels), len(aMean)/len(lLabels)) )
+			aErr.resize( (len(lLabels), len(aErr)/len(lLabels)) )
+			for yData, yErr, label in zip(aMean, aErr, lLabels):
+				xData = np.linspace(0, len(yData)-1, len(yData))
+				plt.errorbar(xData, yData, yerr=yErr, label=label,
+					color=colors.pop(), fmt=fmts.pop(),
+					capsize=Constants.capSize,
+					linewidth=Constants.plotLineWidth,
+					linestyle=linestyles.pop())
+					
+		# Plot a single line
+		else:
+			plt.errorbar(xData, aMean, yerr=aErr, color=colors.pop(),
+				fmt=fmts.pop(), capsize=Constants.capSize, 
+				linewidth=Constants.plotLineWidth,
+				linestyle=linestyles.pop())
+				
+		# Flip axis if necessary
+		if _dir == 'down':
+			plt.gca().invert_yaxis()									
+						
+		_ticks(xData, xLabels, figure=fig, rotation=xLabelRot)		
+		_lim(xData.min()-spacing, xData.max()+spacing)
+		if yLim != None:
+			_vlim(yLim)
+		
+		if lLabels != []:
+			if legendPos != None:
+				plt.legend(loc=legendPos, title=legendTitle, frameon=False)
+
+		if xLabel != None:
+			plt.xlabel(xLabel)
+		if yLabel != None:
+			plt.ylabel(yLabel)
+				
+		# Optionally show the figure
+		if show:
+			plt.show()
+		
+		return fig	
+		
 	def plot(self, nLvl1=2, size=(5,4), dpi=90, show=False, errBar=True,
 		lineLabels=None, xTicks=None, xLabel=None, yLabel=None, grid=False, \
 		lineWidth=None, symbols=None, errCap=0, fontFamily='Arial', fontSize=9, \
 		colors=None, legendPos='best', yLim=None, plotType='line', barWidth=.2,
 		xMargin=.2, barEdgeColor='#000000', title=None, xData=None, fig=None, 
-		legendTitle=None, dPlot=None, xTicksRot='horizontal', xTicksFmt='%d'):
+		legendTitle=None, dPlot=None, xTicksRot='horizontal', xTicksFmt='%s',\
+		xTickLabels = None):
 
 		"""
 		Plots the current PivotMatrix. The graph is generated such that the
@@ -371,7 +561,7 @@ class PivotMatrix(BaseMatrix):
 						plt.xlim(min(xTicks)-m, max(xTicks)+m)
 					else:
 						xData = np.linspace(0, len(xTicks)-1, len(yData))
-						plt.xlim(-xMargin, len(xTicks)-(1.-xMargin))
+						plt.xlim(-xMargin-(.5*barWidth), len(xTicks)-(1.-xMargin)+(.5*barWidth))
 
 			if plotType == 'line':
 
@@ -386,14 +576,13 @@ class PivotMatrix(BaseMatrix):
 				xData += i*barWidth - .5*barWidth*len(aMean)
 				plt.bar(xData, yData, barWidth, color=color, \
 					linewidth=lineWidth, edgecolor=barEdgeColor, label=label)
-				xData += .5*barWidth
-
+				xData += 1*barWidth
 
 			if errBar:
 				for x,y,err in zip(xData,yData,yErr):
 					if plotType == 'bar':
 						color = barEdgeColor
-					plt.errorbar(x, y, err, fmt=None, figure=fig, ecolor=color, \
+					plt.errorbar(x-(.5*barWidth), y, err, fmt=None, figure=fig, ecolor=color, \
 						linewidth=lineWidth, capsize=errCap)
 			i += 1
 
@@ -416,7 +605,9 @@ class PivotMatrix(BaseMatrix):
 
 		if legendPos != None:
 			plt.legend(loc=legendPos, title=legendTitle, frameon=False)
+
 		if show:
 			plt.show()
 		return fig
+
 
