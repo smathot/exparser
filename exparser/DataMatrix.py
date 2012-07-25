@@ -293,7 +293,7 @@ class DataMatrix(BaseMatrix):
 			a = self.m[self.m[vName] == vVal]
 			dm = DataMatrix(a, structured=True)
 			l += dm.group(keys[1:])
-		return l
+		return l		
 
 	def select(self, query, verbose=True):
 
