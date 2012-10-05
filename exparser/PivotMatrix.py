@@ -26,7 +26,7 @@ class PivotMatrix(BaseMatrix):
 	"""A PivotMatrix 'summary table' based on a DataMatrix"""
 
 	def __init__(self, dm, cols, rows, dv, func='mean()', err='95ci', \
-		colsWithin=True):
+		colsWithin=False):
 
 		"""
 		Constructor. Generates a PivotMatrix that summarizes a SmartArray
@@ -177,9 +177,9 @@ class PivotMatrix(BaseMatrix):
 
 		return self.m
 		
-	def barPlot(self, fig=None, show=False, _dir='up', barSpacing1=1, \
-		barSpacing2=.5, barWidth=.75, xLabels=None, lLabels=None, xLabelRot=0, \
-		yLim=None, legendPos='best',legendTitle = None, ylabel=None):
+	def barPlot(self, fig=None, show=False, _dir='up', barSpacing1=.5, \
+		barSpacing2=.25, barWidth=.85, xLabels=None, lLabels=None, xLabelRot=0, \
+		yLim=None, legendPos='best',legendTitle=None, yLabel=None, xLabel=None):
 		
 		"""
 		Draws a bar chart. Only 1 and 2 factor designs are allowed.
@@ -224,7 +224,7 @@ class PivotMatrix(BaseMatrix):
 			colNr = -1
 			
 			# Determine label for column group
-			l1 = str(dm[v1][0][0])
+			l1 = str(dm[v1][0])
 			_xLabels.append(l1)
 			left = x			
 
@@ -238,7 +238,7 @@ class PivotMatrix(BaseMatrix):
 				
 				# Get legend labels
 				if v2 != []:
-					l2 = _dm[v2][0][0]
+					l2 = _dm[v2][0]
 					_lLabels.append(str(l2))
 								
 				# Advance to the next column (we are counting downwards because
@@ -319,6 +319,8 @@ class PivotMatrix(BaseMatrix):
 				
 		if yLabel != None:
 			plt.ylabel(yLabel)
+		if xLabel != None:
+			plt.xlabel(xLabel)			
 				
 		# Optionally show the figure
 		if show:
@@ -363,22 +365,19 @@ class PivotMatrix(BaseMatrix):
 		colors = []
 		x = 0
 
-		for dm in self.dm.group(v1):		
+		for dm in self.dm.group(v2):		
 			colNr = -1
 			
-			# Determine label for column group
-#			l1 = str(dm[v1][0][0])
-			l1 = str(dm[v1][0])
-			_xLabels.append(l1)
+			l2 = unicode(dm[v2][0])
+			_xLabels.append(l2)
 			left = x			
 
 			_lLabels = []			
-			for _dm in dm.group(v2):			
+			for _dm in dm.group(v1):			
 				# Get legend labels
-				if v2 != []:
-#					l2 = _dm[v2][0][0]
-					l2 = _dm[v2][0]
-					_lLabels.append(str(l2))
+				if v1 != []:
+					l1 = _dm[v1][0]			
+					_lLabels.append(unicode(l1))
 										
 		# Optionally create a new figure
 		if fig == None:
@@ -406,7 +405,6 @@ class PivotMatrix(BaseMatrix):
 			xLabels = _xLabels
 		if lLabels == None:
 			lLabels = _lLabels
-
 				
 		colors = Constants.plotLineColors[:]
 		fmts = Constants.plotLineSymbols[:]
@@ -427,6 +425,7 @@ class PivotMatrix(BaseMatrix):
 					
 		# Plot a single line
 		else:
+			xData = np.linspace(0, len(aMean)-1, len(aMean))
 			plt.errorbar(xData, aMean, yerr=aErr, color=colors.pop(),
 				fmt=fmts.pop(), capsize=Constants.capSize, 
 				linewidth=Constants.plotLineWidth,

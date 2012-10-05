@@ -268,8 +268,35 @@ class DataMatrix(BaseMatrix):
 		if dtype:
 			return self.m.dtype.descr
 		return list(self.m.dtype.names)
+	
+	def recode(self, key, coding):
+		
+		"""
+		Recodes values (i.e. changes one value into another for a given set of
+		columns).
+		
+		Arguments:
+		key -- the name of the variable to recode, or a list of names to recode
+			   multiple variables in one go
+		coding -- an (oldValue, newValue) tuple, or a list of tuples to handle
+				  multiple recodings in one go				
+		"""
+		
+		if type(key) == list:
+			for _key in key:
+				self.recode(_key, coding)
+			return
+		
+		if type(coding) == list:
+			for _coding in coding:
+				self.recode(key, _coding)
+			return
+		
+		oldValue, newValue = coding
+		i = np.where(self.m[key] == oldValue)
+		self.m[key][i] = newValue
 
-	def group(self, keys):
+	def group(self, keys, _sort=True):
 
 		"""
 		Split the data into different groups based on unique values for the
@@ -277,6 +304,10 @@ class DataMatrix(BaseMatrix):
 
 		Arguments:
 		keys -- a list of variable names, or a single variable name
+		
+		Keyword arguments:
+		_sort -- indicates whether the groups should be sorted by values
+				 (default=True)
 
 		Returns:
 		A list of DataMatrices
@@ -288,6 +319,8 @@ class DataMatrix(BaseMatrix):
 			return [self]
 		vName = keys[0]
 		vVals = np.unique(self.m[vName])
+		if _sort:
+			vVals = sorted(list(vVals))
 		l = []
 		for vVal in vVals:
 			a = self.m[self.m[vName] == vVal]
@@ -335,6 +368,81 @@ class DataMatrix(BaseMatrix):
 			a[3,2] = 100.*dm.m.size/self.m.size #100.*len(dm.m)/len(self.m)
 			BaseMatrix(a)._print()
 		return dm
+	
+	def selectByStdDev(self, keys, dv, thr=2.5, verbose=False):
+		
+		"""
+		Select only those rows where the value of a given column is within a 
+		certain distance from the mean
+		
+		Arguments:
+		keys -- a list of column names
+		dv -- the dependent variable
+		
+		Keyword arguments:
+		thr -- the stddev threshold (default=2.5)
+		verbose -- indicates whether detailed output should be provided
+				   (default=False)
+		
+		Returns:
+		A selection of the current DataMatrix
+		"""
+	
+		print '======================================='
+		print '| Selecting based on Standard Deviation'
+		print '| Threshold: %.2f' % thr
+		print '| Keys: %s' % ','.join(keys)
+		print '|'
+		dm = self.clone()
+	
+		# Create a dummy field that combines the keys, so we can simply group
+		# based on one key
+		dm = dm.addField('__dummyCond__', dtype=str)
+		for key in keys:
+			for i in range(len(dm)):
+				dm['__dummyCond__'][i] += str(dm[key][i]) + '__'
+		
+		# Add a field to store outliers
+		dm = dm.addField('__stdOutlier__', dtype=int)
+		dm['__stdOutlier__'] = 0
+		
+		for cond in np.unique(dm['__dummyCond__']):
+			if verbose:
+				print '| Condition (recoded):', cond
+			# Get mean and standard deviation of one particular condition
+			iCond = np.where(dm['__dummyCond__'] == cond)[0] # Indices of trials in condition
+			m = dm[dv][iCond].mean()
+			sd = dm[dv][iCond].std()			
+			if verbose:
+				print '| M = %f, SD = %f' % (m, sd)
+			# Get indices of trials that are too fast or too slow given the boundaries based
+			# on this particular condition
+			iTooSlow = np.where(dm[dv] > m+thr*sd)[0]
+			iTooFast = np.where(dm[dv] < m-thr*sd)[0]
+			# Get the indices of trials only in this condition, that are too fast or too
+			# slow: 'cond and (tooslow or toofast)'
+			i = np.intersect1d(iCond, np.concatenate( (iTooSlow, iTooFast) ))	
+			if verbose:
+				print '| # outliers: %d of %d' % (len(i), len(iCond))	
+			dm['__stdOutlier__'][i] = 1
+			
+		dm = dm.select('__stdOutlier__ == 0')
+		print
+		return dm
+	
+	def unique(self, dv):
+		
+		"""
+		Gives all unique values for a particular variable
+		
+		Arguments:
+		dv -- the dependent variable
+		
+		Returns:
+		An array of unique values for dv
+		"""
+		
+		return np.unique(self[dv])
 		
 	def withinize(self, dv, key, verbose=True):
 	
