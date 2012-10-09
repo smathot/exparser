@@ -444,30 +444,40 @@ class DataMatrix(BaseMatrix):
 		
 		return np.unique(self[dv])
 		
-	def withinize(self, dv, key, verbose=True):
+	def withinize(self, vName, targetVName, key, verbose=True, whiten=False):
 	
 		"""
 		Removes the between factor variance for a given key (such as subject or
-		file) for a given depedent variable.
+		file) for a given dependent variable.
 		
 		Arguments:
-		dv -- the dependent variable to withinize
+		vName -- the dependent variable to withinize
+		targetVName -- the target variable
 		key -- the key that defines the within group
 		
 		Keyword arguments:
 		verbose -- indicates whether the results should be printed (default=
 				   True)		
+		whiten -- indicates whether the data should be whitened so that the
+				  standard deviation is 1 and the mean 0 (default=False)
 		"""
 		
-		gAvg = self.m[dv].mean()
+		self.m[targetVName] = self.m[vName]
+		gAvg = self.m[targetVName].mean()
 		if verbose:
 			print "Grand avg =", gAvg
 		for f in np.unique(self.m[key]):				
 			i = np.where(self.m[key] == f)
-			fAvg = self.m[dv][i].mean()
+			fAvg = self.m[targetVName][i].mean()
+			fStd = self.m[targetVName][i].std()
+			print fStd
 			if verbose:
 				print "Avg(%s) = %f" % (f, fAvg)
-			self.m[dv][i] += gAvg - fAvg
+			if whiten:
+				self.m[targetVName][i] -= fAvg
+				self.m[targetVName][i] /= fStd
+			else:
+				self.m[targetVName][i] += gAvg - fAvg
 		return self				
 
 def fromMySQL(query, user, passwd, db, charset='utf8', use_unicode=True):
