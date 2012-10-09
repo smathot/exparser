@@ -470,7 +470,6 @@ class DataMatrix(BaseMatrix):
 			i = np.where(self.m[key] == f)
 			fAvg = self.m[targetVName][i].mean()
 			fStd = self.m[targetVName][i].std()
-			print fStd
 			if verbose:
 				print "Avg(%s) = %f" % (f, fAvg)
 			if whiten:
