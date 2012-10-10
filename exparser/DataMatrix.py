@@ -73,11 +73,11 @@ class DataMatrix(BaseMatrix):
 		dtype = []
 		for i in range(len(vNames)):
 			try:
-				np.array(_vVals[i], dtype=np.int32)
+				for v in _vVals[i]: int(v)
 				dtype.append( (vNames[i], np.int32) )
 			except:
 				try:
-					np.array(_vVals[i], dtype=np.float64)
+					for v in _vVals[i]: float(v)
 					dtype.append( (vNames[i], np.float64) )
 				except:
 					dtype.append( (vNames[i], '|S128') )
