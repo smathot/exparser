@@ -29,7 +29,7 @@ class EyelinkAscFolderReader(BaseReader):
 	
 	def __init__(self, path='data', ext='.asc', ignoreBlinks=True, \
 		startTrialKey='start_trial', endTrialKey='stop_trial', \
-		variableKey='var', dtype='|S128', maxN=None):
+		variableKey='var', dtype='|S128', maxN=None, requireEndTrial=True):
 
 		"""
 		Constructor. Reads all Eyelink ASCII files from a specific folder.
@@ -44,6 +44,9 @@ class EyelinkAscFolderReader(BaseReader):
 		variableKey -- the variable keyword (default='var')
 		dtype -- the numpy dtype to be used (default='|S128')
 		maxN -- the maximum number of subjects to process (default=None)
+		requireEndTrial -- indicates whether an exception should be raised if a
+						  trial hasn't been neatly closed. Otherwise the trial
+						  is simply disregarded. (default=True)
 		"""
 
 		self.ignoreBlinks=True
@@ -51,6 +54,7 @@ class EyelinkAscFolderReader(BaseReader):
 		self.endTrialKey = endTrialKey
 		self.variableKey = variableKey
 		self.dtype = dtype
+		self.requireEndTrial = requireEndTrial
 
 		print '\nScanning \'%s\'' % path
 		self.m = None
@@ -177,7 +181,9 @@ class EyelinkAscFolderReader(BaseReader):
 			l = self.strToList(s)
 			trialId = self.startTrial(l)
 			if trialId != None:
-				lTrialDict.append(self.parseTrial(trialId, fd))
+				trialDict = self.parseTrial(trialId, fd)
+				if trialDict != None:
+					lTrialDict.append(trialDict)
 
 		# Extract the column names
 		lVar = []
@@ -249,8 +255,13 @@ class EyelinkAscFolderReader(BaseReader):
 			if not inBlink:
 				self.parseLine(trialDict, l)
 
-		raise Exception('Trial %s was started but not ended' \
-			% trialDict['trialId'])
+		if self.requireEndTrial:
+			raise Exception('Trial %s was started but not ended' \
+				% trialDict['trialId'])
+		else:
+			warnings.warn('Trial %s was started but not ended' \
+				% trialDict['trialId'])
+			return None
 
 	def parseVariables(self, trialDict, l):
 
