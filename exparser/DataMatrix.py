@@ -168,6 +168,8 @@ class DataMatrix(BaseMatrix):
 		A DataMatrix
 		"""
 
+		if vName in self.columns():
+			raise Exception('field "%s" already exists' % vName)
 		a = np.zeros(self.m.shape, dtype=self.m.dtype.descr + [(vName, dtype)])
 		for name in self.m.dtype.names:
 			a[name] = self.m[name]
