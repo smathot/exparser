@@ -610,3 +610,26 @@ class PivotMatrix(BaseMatrix):
 		return fig
 
 
+	def scatterPlot(self, show=False):
+		
+		"""
+		Creates a scatterplot. This function assumes that the PivotMatrix has two
+		columns, such that the first column is used as the X-coordinate, and the
+		second is used as the Y-coordinate.
+		
+		Keyword arguments:
+		show -- 
+		"""
+		
+		# Get the mean and error values from the matrix	
+		aMean = np.array(self.m[2:-2,2:2:-2], dtype=float)
+		
+		if len(self.cols) != 1:
+			raise Exception('In order to plot a scatterPlot, there must a single factor in the columns, with two levels')
+		
+		xData = np.array(self.m[2:-2,-4], dtype=float)
+		yData = np.array(self.m[2:-2,-3], dtype=float)
+		
+		plt.plot(xData, yData, 'o')
+		if show:
+			plt.show()
