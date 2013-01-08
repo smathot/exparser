@@ -108,7 +108,7 @@ class BaseMatrix:
 
 		return copy.deepcopy(self)
 
-	def save(self, path='DataMatrix.csv', delimiter=','):
+	def save(self, path='DataMatrix.csv', delimiter=',', fmt='%s'):
 
 		"""
 		Write the current DataMatrix to a plaintext csv file
@@ -116,6 +116,7 @@ class BaseMatrix:
 		Keyword arguments:
 		path -- the path of the file to write (default='DataMatrix.csv')
 		delimiter -- the character used to separate columns (default=',')
+		fmt -- the format to parse cells with (default='%s')
 		"""
 
-		numpy.savetxt(path, self.asArray(), fmt='%s', delimiter=delimiter)
+		numpy.savetxt(path, self.asArray(), fmt=fmt, delimiter=delimiter)

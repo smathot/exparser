@@ -26,7 +26,7 @@ import warnings
 class EyelinkAscFolderReader(BaseReader):
 
 	"""Parses Eyelink ASCII data"""
-	
+
 	def __init__(self, path='data', ext='.asc', ignoreBlinks=True, \
 		startTrialKey='start_trial', endTrialKey='stop_trial', \
 		variableKey='var', dtype='|S128', maxN=None, requireEndTrial=True):
@@ -57,27 +57,36 @@ class EyelinkAscFolderReader(BaseReader):
 		self.requireEndTrial = requireEndTrial
 
 		print '\nScanning \'%s\'' % path
-		self.m = None
-		nFile = 0		
+		#self.m = None
+		self.dm = None
+		nFile = 0
 		for fname in os.listdir(path):
 			if os.path.splitext(fname)[1] == ext:
 				print 'Reading %s ...' % fname,
 				a = self.parseFile(os.path.join(path, fname))
-				if self.m == None:
-					self.m = a
+				dm = DataMatrix(a)
+				if self.dm == None:
+					self.dm = dm
 				else:
-					try:
-						self.m = numpy.concatenate( (self.m, a[1:]), axis=0)
-					except ValueError as e:
-						print
-						print 'Trying to concatenate'
-						print a[0]
-						print a[1:][-1]
-						print 'to'
-						print self.m[0]
-						print self.m[-1]
-						raise(e)
-				print '(%d trials)' % (a[:,0].size-1)
+					self.dm += dm
+				print '(%d rows)' % len(dm)
+
+
+				#if self.m == None:
+					#self.m = a
+				#else:
+					#try:
+						#self.m = numpy.concatenate( (self.m, a[1:]), axis=0)
+					#except ValueError as e:
+						#print
+						#print 'Trying to concatenate'
+						#print a[0]
+						#print a[1:][-1]
+						#print 'to'
+						#print self.m[0]
+						#print self.m[-1]
+						#raise(e)
+				#print '(%d trials)' % (a[:,0].size-1)
 				nFile += 1
 			if maxN != None and nFile >= maxN:
 				break
@@ -114,7 +123,7 @@ class EyelinkAscFolderReader(BaseReader):
 		A DataMatrix
 		"""
 
-		return DataMatrix(self.m)
+		return self.dm
 
 	def startTrial(self, l):
 
@@ -277,7 +286,7 @@ class EyelinkAscFolderReader(BaseReader):
 		# MSG [time] [variableKey] [name] [value]
 		if len(l) > 4 and l[0] == 'MSG' and l[2] == self.variableKey:
 			var = l[3]
-			val = l[4]			
+			val = l[4]
 		# Sometimes, variables are notes like
 		# [variableKey] [name] [value]
 		elif len(l) > 2 and l[0] == self.variableKey:
@@ -285,12 +294,12 @@ class EyelinkAscFolderReader(BaseReader):
 			val = l[2]
 		else:
 			return
-			
+
 		if var in trialDict:
 			warnings.warn('Variable \'%s\' occurs twice in trial %s' \
 				% (var, trialDict['trialId']))
 		trialDict[var] = val
-			
+
 	def strToList(self, s):
 
 		"""

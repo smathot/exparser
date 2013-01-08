@@ -17,38 +17,29 @@ along with exparser.  If not, see <http://www.gnu.org/licenses/>.
 
 from exparser.BaseReader import BaseReader
 from exparser.DataMatrix import DataMatrix
-from exparser.CsvReader import CsvReader
 import os
 import os.path
 import numpy as np
 import csv
 
-class CsvFolderReader(BaseReader):
+class CsvReader(BaseReader):
 
-	def __init__(self, path='data', ext='.csv', delimiter=',', quote='"'):
+	def __init__(self, path='data.csv', delimiter=',', quote='"'):
 
 		"""
-		Constructor. Reads all csv files from a specific folder.
+		Constructor. Reads a single csv file.
 
 		Keyword arguments:
 		path -- the folder containing the csv files (default='data')
-		ext -- the extension of the csv files (default='.csv')
-		quote -- the character used for quoting columns (default=None)
+		delimiter -- the column delimiter (default=',')
+		quote -- the character used for quoting columns (default='"')
 		"""
 
-		print 'Scanning \'%s\'' % path
-		#self.m = None
-		self.dm = None
-		for fname in os.listdir(path):
-			if os.path.splitext(fname)[1] == ext:
-				print 'Reading %s ...' % fname,
-				dm = CsvReader(os.path.join(path, fname), delimiter=delimiter, \
-					quote=quote).dataMatrix()
-				if self.dm == None:
-					self.dm = dm
-				else:
-					self.dm += dm
-				print '(%d rows)' % len(dm)
+		reader = csv.reader(open(path), delimiter=delimiter, quotechar=quote)
+		l = []
+		for row in reader:
+			l.append(row)
+		self.m = np.array(l, dtype='|S128')
 
 	def dataMatrix(self):
 
@@ -57,5 +48,4 @@ class CsvFolderReader(BaseReader):
 		A DataMatrix
 		"""
 
-		return self.dm
-		#return DataMatrix(self.m)
+		return DataMatrix(self.m)

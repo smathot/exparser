@@ -20,6 +20,7 @@ import types
 import numpy as np
 from exparser.BaseMatrix import BaseMatrix
 from exparser import Constants
+from scipy.stats.stats import nanmean, nanstd
 
 class PivotMatrix(BaseMatrix):
 
@@ -33,9 +34,10 @@ class PivotMatrix(BaseMatrix):
 
 		Arguments:
 		dm -- a DataMatrix
-		cols -- a list of keys for the colums
+		cols -- a list of keys for the columns
 		rows -- a list of keys for the rows
-		dv -- the variable to summarize
+		dv -- the variable to summarize. If the variable is a function, it will
+			  be used to derive the dependent variable in a more flexible way.
 
 		Keyword arguments:
 		func -- the function (np.[func]) that is applied on the dependent
@@ -45,6 +47,13 @@ class PivotMatrix(BaseMatrix):
 		colsWithin -- specifies whether the column variables should be treated
 					  as within subject factors (default=False)
 		"""
+
+		# A common mistake is to pass a string rather than a list of string(s),
+		# so capture that mistake here.
+		if isinstance(cols, basestring):
+			cols = [cols]
+		if isinstance(rows, basestring):
+			rows = [rows]
 
 		self.colHeaders = len(rows)*2
 		self.rowHeaders = len(cols)*2
@@ -57,28 +66,31 @@ class PivotMatrix(BaseMatrix):
 		self.colsWithin = colsWithin
 
 		# First create a matrix and fill it with data
-		rowGroup = dm.group(rows)						
-		self.nRows = len(rowGroup)				
+		rowGroup = dm.group(rows)
+		self.nRows = len(rowGroup)
 		firstRow = True
 		row = 0
 		nCols = None
 		for dm in rowGroup:
-			colGroup = dm.group(cols)			
+			colGroup = dm.group(cols)
 			self.nCols = len(colGroup)
 			if firstRow:
 				self.m = np.zeros( (self.rowHeaders+len(rowGroup)+2, \
 					self.colHeaders+len(colGroup)+2), dtype=np.float64)
-			col = 0			
+			col = 0
 			for _dm in colGroup:
-				if type(func) == types.FunctionType:
-					val = func(_dm[dv])
+				if type(dv) == types.FunctionType:
+					val = dv(_dm)
 				else:
-					val = eval("_dm[dv].%s" % func)	
-				self.m[self.rowHeaders+row, self.colHeaders+col] = val					
-				col += 1				
+					if type(func) == types.FunctionType:
+						val = func(_dm[dv])
+					else:
+						val = eval("_dm[dv].%s" % func)
+				self.m[self.rowHeaders+row, self.colHeaders+col] = val
+				col += 1
 			if nCols != None and col != nCols:
-				raise Exception('Some cells are empty!')				
-			nCols = col				
+				raise Exception('Some cells are empty!')
+			nCols = col
 			row += 1
 			firstRow = False
 
@@ -140,33 +152,35 @@ class PivotMatrix(BaseMatrix):
 		self.rowStds = []
 		for rowIndex in range(self.nRows):
 			row = self.m[self.rowHeaders+rowIndex][self.colHeaders:-2]
-			self.rowMeans.append(row.mean())
-			self.rowStds.append(row.std())
-			self.m[self.rowHeaders+rowIndex][-2] = row.mean()
-			self.m[self.rowHeaders+rowIndex][-1] = row.std()
+			self.rowMeans.append(nanmean(row, axis=None))
+			self.rowStds.append(nanstd(row, axis=None))
+			self.m[self.rowHeaders+rowIndex][-2] = nanmean(row, axis=None)
+			self.m[self.rowHeaders+rowIndex][-1] = nanstd(row, axis=None)
 
 		# Determine the column averages and std
 		_m = self.m.swapaxes(0,1)
 		self.colMeans = []
-		self.colErrs = []		
+		self.colErrs = []
 		for colIndex in range(self.nCols):
 			col = _m[self.colHeaders+colIndex][self.rowHeaders:-2]
-			_m[self.colHeaders+colIndex][-2] = col.mean()			
+			_m[self.colHeaders+colIndex][-2] = nanmean(col, axis=None)
 			if self.err == '95ci':
-				e = col.std()/np.sqrt(col.size)*1.96
+				e = nanstd(col, axis=None)/np.sqrt(col.size)*1.96
 			elif self.err == 'se':
-				e = col.std()/np.sqrt(col.size)
+				e = nanstd(col, axis=None)/np.sqrt(col.size)
 			elif self.err == 'std':
-				e = col.std()
+				e = nanstd(col, axis=None)
 			else:
 				raise Exception('Err keyword must be "95ci", "se", or "std"')
 			_m[self.colHeaders+colIndex][-1] = e
-			self.colMeans.append(col.mean())
+			self.colMeans.append(nanmean(col, axis=None))
 			self.colErrs.append(e)
 
 		# Determine the grand average and std
-		self.m[-2,-2] = self.m[self.rowHeaders:-2, self.colHeaders:-2].mean()
-		self.m[-1,-1] = self.m[self.rowHeaders:-2, self.colHeaders:-2].std()
+		self.m[-2,-2] = nanmean(self.m[self.rowHeaders:-2, self.colHeaders:-2], \
+			axis=None)
+		self.m[-1,-1] = nanstd(self.m[self.rowHeaders:-2, self.colHeaders:-2], \
+			axis=None)
 
 	def asArray(self):
 
@@ -176,14 +190,14 @@ class PivotMatrix(BaseMatrix):
 		"""
 
 		return self.m
-		
+
 	def barPlot(self, fig=None, show=False, _dir='up', barSpacing1=.5, \
 		barSpacing2=.25, barWidth=.85, xLabels=None, lLabels=None, xLabelRot=0, \
 		yLim=None, legendPos='best',legendTitle=None, yLabel=None, xLabel=None):
-		
+
 		"""
 		Draws a bar chart. Only 1 and 2 factor designs are allowed.
-		
+
 		Keyword arguments:
 		fig -- an existing matplotlib figure to draw in (default=None)
 		show -- indicates whether the figure should be shown (default=False)
@@ -192,72 +206,72 @@ class PivotMatrix(BaseMatrix):
 		barSpacing1 -- the small spacing between bars (default=1)
 		barSpacing2 -- the extra spacing between groups of bars (default=.5)
 		barWidth -- the width of the bars (default=.75)
-		
+
 		Returns:
 		A matplotlib figure
 		"""
-		
+
 		# Set font
 		plt.rc("font", family=Constants.fontFamily)
 		plt.rc("font", size=Constants.fontSize)
-			
+
 		# Determine the first (v1) and second (v2) factor
 		if len(self.cols) not in (1, 2):
 			raise Exception('You can only plot 1 or 2 factor PivotMatrices')
-		v1 = self.cols[0]			
+		v1 = self.cols[0]
 		if len(self.cols) == 1:
 			v2 = []
 		else:
 			v2 = self.cols[1]
-		
-		# Get the mean and error values from the matrix	
+
+		# Get the mean and error values from the matrix
 		aMean = np.array(self.m[-2,2:-2], dtype=float)
 		aErr = np.array(self.m[-1,2:-2], dtype=float)
-		
+
 		_xLabels = []
 		xVals = []
 		xData = []
 		colors = []
 		x = 0
 
-		for dm in self.dm.group(v1):		
+		for dm in self.dm.group(v1):
 			colNr = -1
-			
+
 			# Determine label for column group
 			l1 = str(dm[v1][0])
 			_xLabels.append(l1)
-			left = x			
+			left = x
 
-			_lLabels = []			
-			for _dm in dm.group(v2):			
+			_lLabels = []
+			for _dm in dm.group(v2):
 				colors.append(Constants.palette[colNr])
-						
+
 				# Create an x-coordinate for the column
 				x += barSpacing1 + barWidth
 				xData.append(x)
-				
+
 				# Get legend labels
 				if v2 != []:
 					l2 = _dm[v2][0]
 					_lLabels.append(str(l2))
-								
+
 				# Advance to the next column (we are counting downwards because
 				# this value is used to pick the last colours from the palette
 				# list
-				colNr -= 1	
-				
+				colNr -= 1
+
 			# Determine postion for label
 			xVals.append( (left+x)/2 + barWidth )
-										
+
 			# Between conditions there is a gap
 			x += barSpacing2 + barWidth
-			
-		xData = np.array(xData)	
-		
+
+		xData = np.array(xData)
+
 		# Optionally create a new figure
 		if fig == None:
-			fig = plt.figure()						
-			
+			fig = plt.figure()
+
 		if _dir in ('left', 'right'):
 			# Draw a horizontal bar chart
 			_bar = plt.barh
@@ -266,7 +280,7 @@ class PivotMatrix(BaseMatrix):
 			_vlim = plt.xlim
 			_err = dict(xerr=aErr)
 			_lerr = 'xerr'
-		else:		
+		else:
 			# Draw a vertical (normal) bar chart
 			_bar = plt.bar
 			_ticks = plt.xticks
@@ -274,7 +288,7 @@ class PivotMatrix(BaseMatrix):
 			_vlim = plt.ylim
 			_err = dict(yerr=aErr)
 			_lerr = 'yerr'
-				
+
 		# Use keyword labels if provided
 		if xLabels == None:
 			xLabels = _xLabels
@@ -282,7 +296,7 @@ class PivotMatrix(BaseMatrix):
 			lLabels = _lLabels
 
 		if lLabels != []:
-		
+
 			# We need to plot separate bars so that we have labels for the
 			# legend
 			for i in range(len(lLabels)):
@@ -290,99 +304,99 @@ class PivotMatrix(BaseMatrix):
 					_err[_lerr] = aErr[i]
 					_bar(xData[i], aMean[i], barWidth, \
 						color=colors[i], figure=fig, ecolor='black', \
-						capsize=0, label=lLabels[i], **_err)			
+						capsize=0, label=lLabels[i], **_err)
 				else:
 					_err[_lerr] = aErr[i:]
 					_bar(xData[i:], aMean[i:], barWidth, \
 						color=colors[i:], figure=fig, ecolor='black', \
 						capsize=0, label=lLabels[i], **_err)
 		else:
-		
+
 			# Draw without legend labels
 			_bar(xData, aMean, barWidth, color=colors, figure=fig, \
 				ecolor='black', capsize=0, **_err)
-				
+
 		# Flip axis if necessary
 		if _dir == 'down':
 			plt.gca().invert_yaxis()
 		if _dir == 'left':
-			plt.gca().invert_xaxis()										
-						
-		_ticks(xVals, xLabels, figure=fig, rotation=xLabelRot)		
+			plt.gca().invert_xaxis()
+
+		_ticks(xVals, xLabels, figure=fig, rotation=xLabelRot)
 		_lim(xData.min()-barSpacing2, xData.max()+barWidth+barSpacing2)
 		if yLim != None:
 			_vlim(yLim)
-		
+
 		if lLabels != []:
 			if legendPos != None:
 				plt.legend(loc=legendPos, title=legendTitle, frameon=False)
-				
+
 		if yLabel != None:
 			plt.ylabel(yLabel)
 		if xLabel != None:
-			plt.xlabel(xLabel)			
-				
+			plt.xlabel(xLabel)
+
 		# Optionally show the figure
 		if show:
 			plt.show()
-		
+
 		return fig
-		
+
 	def linePlot(self, fig=None, show=False, _dir='up', spacing=.5, \
 		xLabels=None, lLabels=None, xLabelRot=0, yLim=None, legendPos='best', \
 		legendTitle=None, yLabel=None, xLabel=None):
-				
+
 		"""
 		Draws a line chart. Only 1 and 2 factor designs are allowed.
-		
+
 		Keyword arguments:
 		fig -- an existing matplotlib figure to draw in (default=None)
 		show -- indicates whether the figure should be shown (default=False)
 		_dir -- the direction of the bars ('up', 'down') (default='up')
-		
+
 		Returns:
 		A matplotlib figure
 		"""
-		
+
 		# Set font
 		plt.rc("font", family=Constants.fontFamily)
 		plt.rc("font", size=Constants.fontSize)
-			
+
 		# Determine the first (v1) and second (v2) factor
 		if len(self.cols) not in (1, 2):
 			raise Exception('You can only plot 1 or 2 factor PivotMatrices')
-		v1 = self.cols[0]			
+		v1 = self.cols[0]
 		if len(self.cols) == 1:
 			v2 = []
 		else:
 			v2 = self.cols[1]
-		
-		# Get the mean and error values from the matrix	
+
+		# Get the mean and error values from the matrix
 		aMean = np.array(self.m[-2,2:-2], dtype=float)
 		aErr = np.array(self.m[-1,2:-2], dtype=float)
-		
+
 		_xLabels = []
 		colors = []
 		x = 0
 
-		for dm in self.dm.group(v2):		
+		for dm in self.dm.group(v2):
 			colNr = -1
-			
+
 			l2 = unicode(dm[v2][0])
 			_xLabels.append(l2)
-			left = x			
+			left = x
 
-			_lLabels = []			
-			for _dm in dm.group(v1):			
+			_lLabels = []
+			for _dm in dm.group(v1):
 				# Get legend labels
 				if v1 != []:
-					l1 = _dm[v1][0]			
+					l1 = _dm[v1][0]
 					_lLabels.append(unicode(l1))
-										
+
 		# Optionally create a new figure
 		if fig == None:
-			fig = plt.figure()						
-			
+			fig = plt.figure()
+
 		if _dir in ('left', 'right'):
 			# Draw a horizontal bar chart
 			_bar = plt.barh
@@ -391,7 +405,7 @@ class PivotMatrix(BaseMatrix):
 			_vlim = plt.xlim
 			_err = dict(xerr=aErr)
 			_lerr = 'xerr'
-		else:		
+		else:
 			# Draw a vertical (normal) bar chart
 			_bar = plt.bar
 			_ticks = plt.xticks
@@ -399,17 +413,17 @@ class PivotMatrix(BaseMatrix):
 			_vlim = plt.ylim
 			_err = dict(yerr=aErr)
 			_lerr = 'yerr'
-				
+
 		# Use keyword labels if provided
 		if xLabels == None:
 			xLabels = _xLabels
 		if lLabels == None:
 			lLabels = _lLabels
-				
+
 		colors = Constants.plotLineColors[:]
 		fmts = Constants.plotLineSymbols[:]
 		linestyles = Constants.plotLineStyles[:]
-		
+
 		# Plot multiple lines
 		if lLabels != []:
 			i= 0
@@ -422,24 +436,24 @@ class PivotMatrix(BaseMatrix):
 					capsize=Constants.capSize,
 					linewidth=Constants.plotLineWidth,
 					linestyle=linestyles.pop())
-					
+
 		# Plot a single line
 		else:
 			xData = np.linspace(0, len(aMean)-1, len(aMean))
 			plt.errorbar(xData, aMean, yerr=aErr, color=colors.pop(),
-				fmt=fmts.pop(), capsize=Constants.capSize, 
+				fmt=fmts.pop(), capsize=Constants.capSize,
 				linewidth=Constants.plotLineWidth,
 				linestyle=linestyles.pop())
-				
+
 		# Flip axis if necessary
 		if _dir == 'down':
-			plt.gca().invert_yaxis()									
-						
-		_ticks(xData, xLabels, figure=fig, rotation=xLabelRot)		
+			plt.gca().invert_yaxis()
+
+		_ticks(xData, xLabels, figure=fig, rotation=xLabelRot)
 		_lim(xData.min()-spacing, xData.max()+spacing)
 		if yLim != None:
 			_vlim(yLim)
-		
+
 		if lLabels != []:
 			if legendPos != None:
 				plt.legend(loc=legendPos, title=legendTitle, frameon=False)
@@ -448,18 +462,18 @@ class PivotMatrix(BaseMatrix):
 			plt.xlabel(xLabel)
 		if yLabel != None:
 			plt.ylabel(yLabel)
-				
+
 		# Optionally show the figure
 		if show:
 			plt.show()
-		
-		return fig	
-		
+
+		return fig
+
 	def plot(self, nLvl1=2, size=(5,4), dpi=90, show=False, errBar=True,
 		lineLabels=None, xTicks=None, xLabel=None, yLabel=None, grid=False, \
 		lineWidth=None, symbols=None, errCap=0, fontFamily='Arial', fontSize=9, \
 		colors=None, legendPos='best', yLim=None, plotType='line', barWidth=.2,
-		xMargin=.2, barEdgeColor='#000000', title=None, xData=None, fig=None, 
+		xMargin=.2, barEdgeColor='#000000', title=None, xData=None, fig=None,
 		legendTitle=None, dPlot=None, xTicksRot='horizontal', xTicksFmt='%s',\
 		xTickLabels = None):
 
@@ -520,14 +534,14 @@ class PivotMatrix(BaseMatrix):
 
 		if fig == None:
 			fig = plt.figure(figsize=size, dpi=dpi)
-		
+
 		if title != None:
 			plt.title(title, figure=fig)
 
 		if grid:
 			plt.grid(alpha=0.5)
 
-		if dPlot != None:			
+		if dPlot != None:
 			if len(aMean) != 2:
 				raise Exception('In order to plot a difference plot, there must be exactly two lines')
 			if dPlot > 1:
@@ -535,7 +549,7 @@ class PivotMatrix(BaseMatrix):
 				aStd = [.5 * (aStd[1] + aStd[0])]
 			else:
 				aMean = [aMean[0] - aMean[1]]
-				aStd = [.5 * (aStd[0] + aStd[1])]		
+				aStd = [.5 * (aStd[0] + aStd[1])]
 
 		i = 0
 		for yData, yErr in zip(aMean, aStd):
@@ -586,15 +600,15 @@ class PivotMatrix(BaseMatrix):
 			i += 1
 
 		if xTicks != None:
-			if type(xTicks[0]) not in (unicode, str):				
+			if type(xTicks[0]) not in (unicode, str):
 				plt.xticks(xTicks, rotation=xTicksRot)
 				xTickLabels = [xTicksFmt % x for x in xTicks]
 				xTickVals = xTicks
 			else:
 				xTickVals = np.arange(len(xTicks))
-				xTickLabels = xTicks				
+				xTickLabels = xTicks
 			plt.xticks(xTickVals, xTickLabels, rotation=xTicksRot)
-			
+
 		if xLabel != None:
 			plt.xlabel(xLabel)
 		if yLabel != None:
@@ -611,25 +625,25 @@ class PivotMatrix(BaseMatrix):
 
 
 	def scatterPlot(self, show=False):
-		
+
 		"""
 		Creates a scatterplot. This function assumes that the PivotMatrix has two
 		columns, such that the first column is used as the X-coordinate, and the
 		second is used as the Y-coordinate.
-		
+
 		Keyword arguments:
-		show -- 
+		show --
 		"""
-		
-		# Get the mean and error values from the matrix	
+
+		# Get the mean and error values from the matrix
 		aMean = np.array(self.m[2:-2,2:2:-2], dtype=float)
-		
+
 		if len(self.cols) != 1:
 			raise Exception('In order to plot a scatterPlot, there must a single factor in the columns, with two levels')
-		
+
 		xData = np.array(self.m[2:-2,-4], dtype=float)
 		yData = np.array(self.m[2:-2,-3], dtype=float)
-		
+
 		plt.plot(xData, yData, 'o')
 		if show:
 			plt.show()
