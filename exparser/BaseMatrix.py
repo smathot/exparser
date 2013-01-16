@@ -21,7 +21,7 @@ along with exparser.  If not, see <http://www.gnu.org/licenses/>.
 import numpy
 import copy
 
-class BaseMatrix:
+class BaseMatrix(object):
 
 	"""Base class for the *Matrix classes"""
 
@@ -43,9 +43,12 @@ class BaseMatrix:
 		A string representation
 		"""
 
-		return '%s' % self.asArray()
+		#return '%s' % self.asArray()
+		return self._print(ret=True)
 
-	def _print(self, title=None, sign=2, maxLen=20, hSep='=', vSep='|'):
+
+	def _print(self, title=None, sign=2, maxLen=20, hSep='=', vSep='|', \
+		ret=False):
 
 		"""
 		Prints a pivot matrix to the standard output
@@ -58,8 +61,11 @@ class BaseMatrix:
 		maxLen -- the maximum column length (default=20)
 		hSep -- the horizontal separator character (default='+')
 		vSep -- the vertical separator character (default='|')
+		ret -- indicates whether the pivotMatrix should be returns as a string
+			   (True) or printed to the standard output (False). (default=False)
 		"""
 
+		sl = []
 		m = self.asArray()
 		l = 0
 		for row in m:
@@ -72,11 +78,11 @@ class BaseMatrix:
 
 		totalL = (1+(l+2)*row.size)*len(vSep)
 
-		print hSep*totalL
+		sl.append( str(hSep*totalL) )
 		if title != None:
 			j = (totalL-len(title))/2-1
-			print vSep + (' '*j + title + ' '*j).ljust(totalL-2) + vSep
-			print hSep*totalL
+			sl.append( vSep + (' '*j + title + ' '*j).ljust(totalL-2) + vSep )
+			sl.append( str(hSep*totalL) )
 
 		for row in m:
 			_l = []
@@ -85,8 +91,12 @@ class BaseMatrix:
 					_l.append(str(('%%.%df' % sign) % float(col)).rjust(l+1))
 				except:
 					_l.append(str(col)[:maxLen].ljust(l+1))
-			print '%s%s%s' % (vSep, vSep.join(_l), vSep)
-		print hSep*totalL
+			sl.append('%s%s%s' % (vSep, vSep.join(_l), vSep))
+		sl.append( str(hSep*totalL) )
+
+		if ret:
+			return '\n'.join(sl)
+		print '\n'.join(sl)
 
 	def asArray(self):
 

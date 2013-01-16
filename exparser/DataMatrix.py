@@ -161,6 +161,12 @@ class DataMatrix(BaseMatrix):
 
 		self.m[vName] = vVal
 
+	def __iter__(self):
+
+		"""Implements an iterator for 'for' loops"""
+
+		return DataMatrixIterator(self)
+
 	def addField(self, vName, dtype=np.int32):
 
 		"""
@@ -323,7 +329,7 @@ class DataMatrix(BaseMatrix):
 				v = '%s_m%d' % (dv, -1*i)
 			else:
 				v = '%s_p%d' % (dv, i)
-			dm = dm.addField(v)
+			dm = dm.addField(v, dtype=type(dm[dv][0]))
 			if i < 0:
 				dm[v][:i] = dm[dv][-i:]
 			else:
@@ -552,6 +558,50 @@ class DataMatrix(BaseMatrix):
 			else:
 				self.m[targetVName][i] += gAvg - fAvg
 		return self
+
+class DataMatrixIterator(object):
+
+	"""Implements an iterator for the dataMatrix"""
+
+	def __init__(self, dm):
+
+		"""
+		Constructor
+
+		Arguments:
+		dm -- a DataMatrix
+		"""
+
+		self.dm = dm
+		self.i = 0
+
+	def __iter__(self):
+
+		"""
+		Returns:
+		self
+		"""
+
+		return self
+
+	def next(self):
+
+		"""
+		Return the current row and advance by one step
+
+		Returns:
+		A DataMatrix with only the current row
+
+		Raises:
+		A StopIteration exception when the DataMatrix is finished
+		"""
+
+		if self.i >= len(self.dm)-1:
+			raise StopIteration
+		self.i += 1
+		a = self.dm.m[[self.i]]
+		return DataMatrix(a, structured=True)
+
 
 def fromMySQL(query, user, passwd, db, charset='utf8', use_unicode=True):
 

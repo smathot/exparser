@@ -29,7 +29,8 @@ class EyelinkAscFolderReader(BaseReader):
 
 	def __init__(self, path='data', ext='.asc', ignoreBlinks=True, \
 		startTrialKey='start_trial', endTrialKey='stop_trial', \
-		variableKey='var', dtype='|S128', maxN=None, requireEndTrial=True):
+		variableKey='var', dtype='|S128', maxN=None, maxTrialId=None, \
+		requireEndTrial=True):
 
 		"""
 		Constructor. Reads all Eyelink ASCII files from a specific folder.
@@ -44,6 +45,7 @@ class EyelinkAscFolderReader(BaseReader):
 		variableKey -- the variable keyword (default='var')
 		dtype -- the numpy dtype to be used (default='|S128')
 		maxN -- the maximum number of subjects to process (default=None)
+		maxTrialId -- the maximum number of trials to process (default=None)
 		requireEndTrial -- indicates whether an exception should be raised if a
 						  trial hasn't been neatly closed. Otherwise the trial
 						  is simply disregarded. (default=True)
@@ -55,9 +57,9 @@ class EyelinkAscFolderReader(BaseReader):
 		self.variableKey = variableKey
 		self.dtype = dtype
 		self.requireEndTrial = requireEndTrial
+		self.maxTrialId = maxTrialId
 
 		print '\nScanning \'%s\'' % path
-		#self.m = None
 		self.dm = None
 		nFile = 0
 		for fname in os.listdir(path):
@@ -70,23 +72,6 @@ class EyelinkAscFolderReader(BaseReader):
 				else:
 					self.dm += dm
 				print '(%d rows)' % len(dm)
-
-
-				#if self.m == None:
-					#self.m = a
-				#else:
-					#try:
-						#self.m = numpy.concatenate( (self.m, a[1:]), axis=0)
-					#except ValueError as e:
-						#print
-						#print 'Trying to concatenate'
-						#print a[0]
-						#print a[1:][-1]
-						#print 'to'
-						#print self.m[0]
-						#print self.m[-1]
-						#raise(e)
-				#print '(%d trials)' % (a[:,0].size-1)
 				nFile += 1
 			if maxN != None and nFile >= maxN:
 				break
@@ -189,6 +174,8 @@ class EyelinkAscFolderReader(BaseReader):
 				break
 			l = self.strToList(s)
 			trialId = self.startTrial(l)
+			if self.maxTrialId != None and trialId > self.maxTrialId:
+				break
 			if trialId != None:
 				trialDict = self.parseTrial(trialId, fd)
 				if trialDict != None:
