@@ -363,6 +363,25 @@ class DataMatrix(BaseMatrix):
 		i = np.where(self.m[key] == oldValue)
 		self.m[key][i] = newValue
 
+	def rename(self, oldKey, newKey):
+
+		"""
+		Renames a column. This function operates in place, so it modifies the
+		current dataMatrix.
+
+		Arguments:
+		oldKey	--	The old name of the column
+		newKey	--	The new name of the column
+		"""
+
+		dtype = []
+		for key, _type in self.m.dtype:
+			if key == oldKey:
+				key = newKey
+			dtype.append( (key, _type) )
+		self.m.dtype = dtype
+		return self
+
 	def group(self, keys, _sort=True):
 
 		"""
