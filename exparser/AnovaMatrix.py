@@ -22,10 +22,6 @@ import types
 import numpy as np
 from exparser.BaseMatrix import BaseMatrix
 from exparser import Constants
-from rpy2 import robjects
-from rpy2.robjects.packages import importr
-stats = importr('stats')
-base = importr('base')
 
 class AnovaMatrix(BaseMatrix):
 
@@ -47,6 +43,11 @@ class AnovaMatrix(BaseMatrix):
 				   If no subject is specified, it will be a regular Anova.
 				   (default=None)
 		"""
+
+		from rpy2 import robjects
+		from rpy2.robjects.packages import importr
+		stats = importr('stats')
+		base = importr('base')
 
 		if subject == None:
 			raise Exception( \

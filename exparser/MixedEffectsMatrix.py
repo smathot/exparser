@@ -22,18 +22,13 @@ import types
 import numpy as np
 from exparser.BaseMatrix import BaseMatrix
 from exparser import Constants
-from rpy2 import robjects
-from rpy2.robjects.packages import importr
-lme4 = importr('lme4')
-utils = importr('utils')
-langR = importr('languageR')
 
 class MixedEffectsMatrix(BaseMatrix):
 
 	"""A matrix containing the results of an Anova analysis"""
 
 	def __init__(self, dm, dv, fixedEffects, randomEffects, continuous=[], \
-		nsim=10000):
+		nSim=10000, formula=None):
 
 		"""
 		Constructor. Note that for now all effects are assumed to be factors,
@@ -50,9 +45,17 @@ class MixedEffectsMatrix(BaseMatrix):
 		Keyword arguments:
 		continuous		--	a list of effects that should be treated as
 							continuous, rather than discrete (default=[])
-		nsim				--	the number of simulations to estimate the P values
+		nSim				--	the number of simulations to estimate the P values
 							(default=10000)
+		formula			--	use a specific formular for R, or None to
+							auto-generate (default=None)
 		"""
+
+		from rpy2 import robjects
+		from rpy2.robjects.packages import importr
+		lme4 = importr('lme4')
+		utils = importr('utils')
+		langR = importr('languageR')
 
 		if type(dv) == types.FunctionType:
 			sdv = dv.__name__
@@ -63,10 +66,13 @@ class MixedEffectsMatrix(BaseMatrix):
 
 		# Construct a formula for R, which should be of the type
 		# 'dv ~ fixed1 * fixed 2  + (1|random1) + (1+random2)'
-		fixedEffectsTemplate = '*'.join(fixedEffects)
-		randomEffectsTemplate = '+'.join(['(1|%s)' % re for re in randomEffects])
-		self._formula = '%s ~ %s + %s' % (dv, fixedEffectsTemplate, \
-			randomEffectsTemplate)
+		if formula == None:
+			fixedEffectsTemplate = '*'.join(fixedEffects)
+			randomEffectsTemplate = '+'.join(['(1|%s)' % re for re in randomEffects])
+			self._formula = '%s ~ %s + %s' % (dv, fixedEffectsTemplate, \
+				randomEffectsTemplate)
+		else:
+			self._formula = formula
 
 		# Register all the variables so that R can use them
 		for f in fixedEffects + randomEffects:
@@ -80,7 +86,7 @@ class MixedEffectsMatrix(BaseMatrix):
 		model = lme4.lmer(robjects.Formula(self._formula), verbose=False)
 
 		# Estimate p-values
-		self.pVals = langR.pvals_fnc(model, nsim=nsim)
+		self.pVals = langR.pvals_fnc(model, nsim=nSim)
 
 		## Convert the results into a Matrix for easy reading
 		l = [['f0', 'slope', 'Pr(>|t|)', 'sign.']]
