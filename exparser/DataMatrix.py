@@ -101,13 +101,27 @@ class DataMatrix(BaseMatrix):
 	def __getitem__(self, vName):
 
 		"""
-		Return a column
+		Returns a column, index, or slice. Valid calls are
+
+		Example:
+		>>> dm['rt'] # returns column 'rt' as numpy array
+		>>> dm[0] # returns first row as DataMatrix
+		>>> dm[0:2] # returns first two rows as DataMatrix
 
 		Arguments:
-		vName -- the name of the variable
+		vName 	--	the name of the variable
 		"""
 
-		return self.m[vName]
+		if type(vName) == int:
+			a = np.array(self.m[vName])
+			a.shape = (1,)
+			return DataMatrix(a, structured=True)
+		elif isinstance(vName, basestring):
+			return self.m[vName]
+		elif isinstance(vName, slice):
+			return DataMatrix(self.m[vName], structured=True)
+		else:
+			raise Exception('Cannot get %s (%s)' % (vName, type(vName)))
 
 	def __len__(self):
 
@@ -118,20 +132,25 @@ class DataMatrix(BaseMatrix):
 
 		return len(self.m)
 
-	def __add__(self, dm):
+	def __add__(self, dm, cautious=False):
 
 		"""
 		Concatenates two DataMatrices. Implements the + operator.
 
 		Arguments:
-		dm -- the DataMatrix to be appended
+		dm			--	the DataMatrix to be appended
+
+		Keyword arguments:
+		cautious		--	indicates the the addition should happen by
+						reconstructing the new DataMatrix column by columns
+						(default=False)
 
 		Returns:
 		The concatenation of the current and the passed DataMatrix
 		"""
 
-		if self.columns() != dm.columns():
-			# Allow concatenation of non-matching datamatrices, but want the
+		if cautious or self.columns() != dm.columns():
+			# Allow concatenation of non-matching datamatrices, but warn the
 			# user to avoid trouble
 			warnings.warn( \
 				'Adding two DataMatrices that do not have matching columns. All non-matching columns will be ignored.')
@@ -139,14 +158,23 @@ class DataMatrix(BaseMatrix):
 			a = np.zeros( (1+len(self)+len(dm), len(cols)), dtype='|S128')
 			i = 0
 			for col in cols:
+				if self[col].dtype != dm[col].dtype:
+					warnings.warn( \
+						'%s has non-matching types (%s and %s)' \
+						% (col, self[col].dtype, dm[col].dtype))
 				a[0, i] = str(col)
 				a[1:, i] = np.concatenate( (self[col], dm[col]) )
 				i += 1
-			_dm = DataMatrix(a)
-		else:
-			# The easy, more efficient way of concatenating
-			_dm = self.clone()
+			return DataMatrix(a)
+
+		# The easy, more efficient way of concatenating
+		_dm = self.clone()
+		try:
 			_dm.m = np.concatenate( (self.m, dm.m) )
+		except:
+			warnings.warn( \
+				'Quick concatenate failed, trying cautious mode')
+			return self.__add__(dm, cautious=True)
 		return _dm
 
 	def __setitem__(self, vName, vVal):
@@ -300,6 +328,24 @@ class DataMatrix(BaseMatrix):
 		if dtype:
 			return self.m.dtype.descr
 		return list(self.m.dtype.names)
+
+	def explode(self, N):
+
+		"""
+		Break up the DataMatrix in N smaller DataMatrices
+
+		Arguments:
+		N		--	the number of DataMatrices to explode in
+
+		Returns:
+		A list of DataMatrices
+		"""
+
+		l = []
+		for a in np.array_split(self.m, N):
+			dm = DataMatrix(a, structured=True)
+			l.append(dm)
+		return l
 
 	def intertrialer(self, keys, dv, _range=[1]):
 
@@ -516,18 +562,24 @@ class DataMatrix(BaseMatrix):
 		print
 		return dm
 
-	def sort(self, keys):
+	def sort(self, keys, ascending=True):
 
 		"""
 		Sorts the matrix
 
 		Arguments:
-		keys -- a list of keys to use for sorting. The first key is dominant,
-				the second key is next-to-dominant, etc. A single string can
-				also be specified.
+		keys 		-- 	a list of keys to use for sorting. The first key is
+						dominant, the second key is next-to-dominant, etc. A
+						single string can also be specified.
+
+		Keyword arguments:
+		ascending	--	indicates whether the sorting should occur in ascending
+						(True) or descending (False) order
 		"""
 
 		self.m.sort(order=keys)
+		if not ascending:
+			self.m = self.m[::-1]
 
 	def unique(self, dv):
 
