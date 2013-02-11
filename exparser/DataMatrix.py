@@ -149,33 +149,22 @@ class DataMatrix(BaseMatrix):
 		The concatenation of the current and the passed DataMatrix
 		"""
 
-		if cautious or self.columns() != dm.columns():
-			# Allow concatenation of non-matching datamatrices, but warn the
-			# user to avoid trouble
-			warnings.warn( \
-				'Adding two DataMatrices that do not have matching columns. All non-matching columns will be ignored.')
-			cols = np.intersect1d(self.columns(), dm.columns())
-			a = np.zeros( (1+len(self)+len(dm), len(cols)), dtype='|S128')
-			i = 0
-			for col in cols:
-				if self[col].dtype != dm[col].dtype:
-					warnings.warn( \
-						'%s has non-matching types (%s and %s)' \
-						% (col, self[col].dtype, dm[col].dtype))
-				a[0, i] = str(col)
-				a[1:, i] = np.concatenate( (self[col], dm[col]) )
-				i += 1
-			return DataMatrix(a)
-
-		# The easy, more efficient way of concatenating
-		_dm = self.clone()
-		try:
-			_dm.m = np.concatenate( (self.m, dm.m) )
-		except:
-			warnings.warn( \
-				'Quick concatenate failed, trying cautious mode')
-			return self.__add__(dm, cautious=True)
-		return _dm
+		cols = np.intersect1d(self.columns(), dm.columns())
+		a = np.zeros( (1+len(self)+len(dm), len(cols)), dtype='|S128')
+		i = 0
+		for col in cols:
+			a[0, i] = str(col)
+			if self[col].dtype != dm[col].dtype:
+				warnings.warn( \
+					'%s has non-matching types (%s and %s)' \
+					% (col, self[col].dtype, dm[col].dtype))										
+				a1 = np.array(self[col], dtype='|S128')
+				a2 = np.array(dm[col], dtype='|S128')
+				a[1:, i] = np.concatenate( (a1, a2) )		
+			else:
+				a[1:, i] = np.concatenate( (self[col], dm[col]) )		
+			i += 1
+		return DataMatrix(a)
 
 	def __setitem__(self, vName, vVal):
 
