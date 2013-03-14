@@ -39,13 +39,23 @@ class DataMatrix(BaseMatrix):
 		values in the other rows, and to be of a string type
 
 		Arguments:
-		a -- a np array or list
+		a -- a np array or list. It can also be a filename, in which case it
+			 will be interpreted as a .npy file.
+			
 
 		Keyword arguments:
 		structured -- indicates whether the passed array is structured. If not,
 					  a structured array will be created, assuming that the
 					  first row contains the column names. (default=False)
 		"""
+		
+		# Load from disk
+		if isinstance(a, basestring):
+			a = np.load(a)
+		
+		# Try to convert lists to arrays
+		if type(a) == list:
+			a = np.array(a)
 
 		# If a structured array was passed, we still need to convert it, to
 		# choose the optimal data type for each column.
@@ -60,10 +70,6 @@ class DataMatrix(BaseMatrix):
 					dtype.append( (vName, '|S128') )
 			self.m = np.array(a, dtype=dtype)
 			return
-
-		# Try to convert lists to arrays
-		if type(a) == list:
-			a = np.array(a)
 
 		# Extract the variable names (first row) and values (the rest)
 		vNames = a[0]
@@ -101,7 +107,13 @@ class DataMatrix(BaseMatrix):
 	def __getitem__(self, vName):
 
 		"""
-		Returns a column, index, or slice. Valid calls are
+		Returns a column, index, or slice. Valid calls are. Note that some
+		operations return a copy of the DataMatrix, so they cannot be used to
+		modify the contents of the DataMatrix. 
+		
+		Exmaple:
+		>>> dm[0]['rt'] = 1 # This doesn't alter the original DataMatrix
+		>>> dm['rt'][0] = 1 # This does!
 
 		Example:
 		>>> dm['rt'] # returns column 'rt' as numpy array
@@ -550,6 +562,12 @@ class DataMatrix(BaseMatrix):
 		dm = dm.select('__stdOutlier__ == 0')
 		print
 		return dm
+	
+	def shuffle(self):
+		
+		"""Shuffles the datamatrix in place"""
+		
+		np.random.shuffle(self.m)
 
 	def sort(self, keys, ascending=True):
 
