@@ -18,7 +18,8 @@ You should have received a copy of the GNU General Public License
 along with exparser.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-import numpy
+import os
+import numpy as np
 import copy
 
 class BaseMatrix(object):
@@ -128,5 +129,8 @@ class BaseMatrix(object):
 		delimiter -- the character used to separate columns (default=',')
 		fmt -- the format to parse cells with (default='%s')
 		"""
-
-		numpy.savetxt(path, self.asArray(), fmt=fmt, delimiter=delimiter)
+				
+		if path.lower().endswith('.npy'):
+			np.save(path, self.asArray())
+		else:
+			np.savetxt(path, self.asArray(), fmt=fmt, delimiter=delimiter)
