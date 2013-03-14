@@ -44,6 +44,8 @@ class CsvFolderReader(BaseReader):
 				print 'Reading %s ...' % fname,
 				dm = CsvReader(os.path.join(path, fname), delimiter=delimiter, \
 					quote=quote).dataMatrix()
+				dm = dm.addField('__src__', dtype=str)
+				dm['__src__'] = fname
 				if self.dm == None:
 					self.dm = dm
 				else:
