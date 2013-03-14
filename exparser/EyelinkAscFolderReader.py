@@ -17,9 +17,11 @@ along with exparser.  If not, see <http://www.gnu.org/licenses/>.
 
 from exparser.BaseReader import BaseReader
 from exparser.DataMatrix import DataMatrix
+from exparser import TraceKit
 import os
-import os.path
-import numpy
+import sys
+import numpy as np
+from matplotlib import pyplot as plt
 from scipy.spatial.distance import euclidean
 import warnings
 
@@ -27,37 +29,52 @@ class EyelinkAscFolderReader(BaseReader):
 
 	"""Parses Eyelink ASCII data"""
 
-	def __init__(self, path='data', ext='.asc', ignoreBlinks=True, \
-		startTrialKey='start_trial', endTrialKey='stop_trial', \
-		variableKey='var', dtype='|S128', maxN=None, maxTrialId=None, \
-		requireEndTrial=True):
+	def __init__(self, path='data', ext='.asc', startTrialKey='start_trial', \
+		endTrialKey='stop_trial', variableKey='var', dtype='|S128', maxN=None, \
+		maxTrialId=None, requireEndTrial=True, traceFolder='traces', \
+		offlineDriftCorr=False):
 
 		"""
 		Constructor. Reads all Eyelink ASCII files from a specific folder.
 
 		Keyword arguments:
-		path -- the folder containing the csv files (default='data')
-		ext -- the extension of the csv files (default='.csv')
-		ignoreBlinks -- indicates whether events during a blink should be
-						ignored (default=True)
-		startTrialKey -- the start trial keyword (default='start_trial')
-		endTrialKey -- the stop trial keyword (default='stop_trial')
-		variableKey -- the variable keyword (default='var')
-		dtype -- the numpy dtype to be used (default='|S128')
-		maxN -- the maximum number of subjects to process (default=None)
-		maxTrialId -- the maximum number of trials to process (default=None)
-		requireEndTrial -- indicates whether an exception should be raised if a
-						  trial hasn't been neatly closed. Otherwise the trial
-						  is simply disregarded. (default=True)
+		path			--	the folder containing the csv files (default='data')
+		ext				--	the extension of the csv files (default='.csv')
+		startTrialKey	-- 	the start trial keyword (default='start_trial')
+		endTrialKey		--	the stop trial keyword (default='stop_trial')
+		variableKey		--	the variable keyword (default='var')
+		dtype			--	the numpy dtype to be used (default='|S128')
+		maxN			--	the maximum number of subjects to process
+							(default=None)
+		maxTrialId		--	the maximum number of trials to process
+							(default=None)
+		requireEndTrial	--	indicates whether an exception should be raised if a
+							trial hasn't been neatly closed. Otherwise the trial
+							is simply disregarded. (default=True)
+		traceFolder		--	the folder to save the gaze traces. Traces are saved
+							as 3d numpy arrays (x, y, pupil size) in .npy
+							format. To start collecting traces, set
+							`self.tracePhase` to a value. Use the value
+							'__baseline__' to use an automatic baseline.							
+							(default='traces')
+		offlineDriftCorr	--	Indicates whether coordinates should be
+								corrected based on the drift-correction check,
+								in case the 'active' drift correctrion is
+								disabled (as on the Eyelink 1000).
+								(default=False)
 		"""
 
-		self.ignoreBlinks=True
 		self.startTrialKey = startTrialKey
 		self.endTrialKey = endTrialKey
 		self.variableKey = variableKey
 		self.dtype = dtype
 		self.requireEndTrial = requireEndTrial
 		self.maxTrialId = maxTrialId
+		self.tracePhase = None
+		self.traceFolder = traceFolder
+		self.traceSmoothParams = None
+		self.offlineDriftCorr = offlineDriftCorr
+		self.driftAdjust = 0,0
 
 		print '\nScanning \'%s\'' % path
 		self.dm = None
@@ -137,7 +154,8 @@ class EyelinkAscFolderReader(BaseReader):
 	def finishTrial(self, trialDict):
 
 		"""
-		Perform some finalization after we we have parsed a trial
+		Perform some finalization after we we have parsed a trial. This function
+		should be overridden by a custom parser.
 
 		Arguments:
 		trialDict -- a trial dictionary
@@ -148,13 +166,91 @@ class EyelinkAscFolderReader(BaseReader):
 	def initTrial(self, trialDict):
 
 		"""
-		Perform some initalization before we start parsing a trial
+		Perform some initalization before we start parsing a trial. This
+		function should be overridden by a custom parser.
 
 		Arguments:
 		trialDict -- a trial dictionary
 		"""
 
 		pass
+	
+	def __finishTrial__(self, trialDict):
+
+		"""
+		Perform some finalization after we we have parsed a trial
+
+		Arguments:
+		trialDict -- a trial dictionary
+		"""
+
+		nPhase = len(self.traceDict)
+		i = 1
+		for phase, trace in self.traceDict.iteritems():
+			a = np.array(trace, dtype=float)
+			if self.traceSmoothParams != None:				
+				origA = a.copy()
+				a[:,0] = TraceKit.smooth(a[:, 0], **self.traceSmoothParams)
+				a[:,1] = TraceKit.smooth(a[:, 1], **self.traceSmoothParams)				
+				a[:,2] = TraceKit.smooth(a[:, 2], **self.traceSmoothParams)
+			self.traceDict[phase] = a
+			path = os.path.join(self.traceFolder, '%s-%.5d-%s.npy' \
+				% (trialDict['file'], trialDict['trialId'], phase))
+			np.save(path, a)		
+			trialDict['__trace_%s__' % phase] = path
+			if '--traceplot' in sys.argv:				
+				plt.subplot(nPhase, 3, i)
+				i += 1
+				plt.title('X(%s)' % phase)
+				plt.plot(a[:,0])
+				if self.traceSmoothParams != None:
+					plt.plot(origA[:,0])
+				plt.subplot(nPhase, 3, i)
+				i += 1
+				plt.title('Y(%s)' % phase)
+				plt.plot(a[:,1])
+				if self.traceSmoothParams != None:
+					plt.plot(origA[:,1])
+				plt.subplot(nPhase, 3, i)
+				i += 1
+				plt.title('Pupil(%s)' % phase)
+				plt.plot(a[:,2])	
+				if self.traceSmoothParams != None:
+					plt.plot(origA[:,2])
+		if '--traceplot' in sys.argv:
+			plt.suptitle(path)
+			plt.show()
+
+	def __initTrial__(self, trialDict):
+
+		"""
+		Perform some initalization before we start parsing a trial
+
+		Arguments:
+		trialDict -- a trial dictionary
+		"""
+
+		self.tracePhase = None
+		self.traceDict = {}
+		
+	def parseDriftCorr(self, l):
+		
+		"""
+		Sets the drift-correction parameters based on the drift correction data.
+		This allows you to do real drift correct offline, even when this was not
+		enabled during the experiment.
+		
+		MSG	900353 DRIFTCORRECT R RIGHT at 512,384  OFFSET 0.45 deg.  -15.5,5.3 pix.
+		
+		Arguments:
+		l	--	a list		
+		"""
+				
+		if 'DRIFTCORRECT' in l and len(l) > 10:			
+			s = l[10].split(',')
+			x = float(s[0])
+			y = float(s[1])			
+			self.driftAdjust = x, y			
 
 	def parseFile(self, path):
 
@@ -173,6 +269,8 @@ class EyelinkAscFolderReader(BaseReader):
 			if s == '':
 				break
 			l = self.strToList(s)
+			if self.offlineDriftCorr:
+				self.parseDriftCorr(l)			
 			trialId = self.startTrial(l)
 			if self.maxTrialId != None and trialId > self.maxTrialId:
 				break
@@ -190,8 +288,8 @@ class EyelinkAscFolderReader(BaseReader):
 		lVar.sort()
 
 		# Construct a numpy array with the variable names on the first row
-		a = numpy.zeros( (len(lTrialDict)+1, len(lVar)), dtype=self.dtype )
-		a[0] = numpy.array(lVar, dtype=self.dtype)
+		a = np.zeros( (len(lTrialDict)+1, len(lVar)), dtype=self.dtype )
+		a[0] = np.array(lVar, dtype=self.dtype)
 		i = 1
 		for trialDict in lTrialDict:
 			for var in lVar:
@@ -219,37 +317,39 @@ class EyelinkAscFolderReader(BaseReader):
 		Parse a single trial
 
 		Arguments:
-		trialId -- the trial id
-		fd -- a file object
+		trialId		--	the trial id
+		fd			--	a file object
 
 		Returns:
 		A dictionary like {'var1' : 'value', ...}
 		"""
 
 		trialDict = {'trialId' : trialId, 'file' : os.path.basename(fd.name), \
-			'outlier' : 0, 'eye_used' : 'undefined'}
-		self.initTrial(trialDict)
+			'outlier' : 0, 'eye_used' : 'undefined', 'n_blink' : 0}
+		self.__initTrial__(trialDict) # Internal stuff
+		self.initTrial(trialDict) # To be overridden 		
 
-		inBlink = False
+		self.inBlink = False
 		while True:
 			s = fd.readline()
 			if s == '':
 				break
 			l = self.strToList(s)
 			if self.endTrial(l):
-				self.finishTrial(trialDict)
+				self.__finishTrial__(trialDict) # Internal stuff
+				self.finishTrial(trialDict) # To be overridden 				
 				return trialDict
-
-			if self.ignoreBlinks:
-				if self.startBlink(s):
-					inBlink = True
-				elif self.endBlink(s):
-					inBlink = False
-
+			if self.startBlink(l):
+				self.inBlink = True
+				trialDict['n_blink'] += 1
+			elif self.endBlink(l):
+				self.inBlink = False
 			self.parseVariables(trialDict, l)
-
-			if not inBlink:
-				self.parseLine(trialDict, l)
+			if self.offlineDriftCorr:
+				self.parseDriftCorr(l)
+			if self.tracePhase != None:
+				self.parseTrace(l)
+			self.parseLine(trialDict, l)
 
 		if self.requireEndTrial:
 			raise Exception('Trial %s was started but not ended' \
@@ -258,6 +358,25 @@ class EyelinkAscFolderReader(BaseReader):
 			warnings.warn('Trial %s was started but not ended' \
 				% trialDict['trialId'])
 			return None
+			
+	def parseTrace(self, l):
+		
+		"""
+		Adds a gaze sample to a trace
+
+		Arguments:
+		l -- a list
+		"""
+		
+		s = self.toSample(l)
+		if s == None:
+			return
+		if self.tracePhase not in self.traceDict:
+			self.traceDict[self.tracePhase] = []			
+		if self.inBlink:
+			self.traceDict[self.tracePhase].append( (np.nan, np.nan, np.nan) )
+		else:
+			self.traceDict[self.tracePhase].append( (s['x'], s['y'], s['pupil']) )
 
 	def parseVariables(self, trialDict, l):
 
@@ -335,16 +454,16 @@ class EyelinkAscFolderReader(BaseReader):
 		try:
 			saccade = {}
 			if len(l) == 15:
-				saccade["sx"] = l[9]
-				saccade["sy"] = l[10]
-				saccade["ex"] = l[11]
-				saccade["ey"] = l[12]
+				saccade["sx"] = l[9] - self.driftAdjust[0]
+				saccade["sy"] = l[10] - self.driftAdjust[1]
+				saccade["ex"] = l[11] - self.driftAdjust[0]
+				saccade["ey"] = l[12] - self.driftAdjust[1]
 			else:
-				saccade["sx"] = l[5]
-				saccade["sy"] = l[6]
-				saccade["ex"] = l[7]
-				saccade["ey"] = l[8]
-			saccade["size"] = numpy.sqrt( (saccade['sx']-saccade['ex'])**2 +
+				saccade["sx"] = l[5] - self.driftAdjust[0]
+				saccade["sy"] = l[6] - self.driftAdjust[1]
+				saccade["ex"] = l[7] - self.driftAdjust[0]
+				saccade["ey"] = l[8] - self.driftAdjust[1]
+			saccade["size"] = np.sqrt( (saccade['sx']-saccade['ex'])**2 +
 				(saccade['sy']-saccade['ey'])**2)
 			saccade["sTime"] = l[2]
 			saccade["eTime"] = l[3]
@@ -357,10 +476,10 @@ class EyelinkAscFolderReader(BaseReader):
 
 		"""
 		Attempts to parse a line (in list format) into a dictionary of sample
-		information.
-
-		TODO:
-		Handle other fixation formats
+		information. The expected format is:
+		
+		# Timestamp x y pupil size ...
+		4815155   168.2   406.5  2141.0 ...
 
 		Arguments:
 		l -- a list
@@ -375,8 +494,9 @@ class EyelinkAscFolderReader(BaseReader):
 		try:
 			sample = {}
 			sample["time"] = int(l[0])
-			sample["x"] = float(l[1])
-			sample["y"] = float(l[2])
+			sample["x"] = float(l[1]) - self.driftAdjust[0]
+			sample["y"] = float(l[2]) - self.driftAdjust[1]
+			sample['pupil'] = float(l[3])
 			return sample
 		except:
 			return None
@@ -401,8 +521,8 @@ class EyelinkAscFolderReader(BaseReader):
 		if len(l) != 8 or l[0] != "EFIX":
 			return None
 		fixation = {}
-		fixation["x"] = l[5]
-		fixation["y"] = l[6]
+		fixation["x"] = l[5] - self.driftAdjust[0]
+		fixation["y"] = l[6] - self.driftAdjust[1]
 		fixation["sTime"] = l[2]
 		fixation["eTime"] = l[3]
 		fixation["duration"] = fixation['sTime'] - fixation['eTime']
