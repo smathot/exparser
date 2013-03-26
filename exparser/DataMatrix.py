@@ -674,10 +674,10 @@ class DataMatrixIterator(object):
 		A StopIteration exception when the DataMatrix is finished
 		"""
 
-		if self.i >= len(self.dm)-1:
+		if self.i >= len(self.dm):
 			raise StopIteration
-		self.i += 1
 		a = self.dm.m[[self.i]]
+		self.i += 1
 		return DataMatrix(a, structured=True)
 
 

@@ -71,8 +71,10 @@ def getTrace(dm, signal=None, phase=None, traceLen=None, offset=0, \
 	aTrace = np.load(npy)[:,i]
 	if lock == 'start':
 		aTrace = aTrace[offset:offset+traceLen]
+	elif offset > 0:
+		aTrace = aTrace[-offset-traceLen:-offset]
 	else:
-		aTrace = aTrace[-offset-traceLen:-offset]				
+		aTrace = aTrace[-traceLen:]
 	if baseline == None:
 		if smoothParams != None:
 			aTrace = smooth(aTrace, **smoothParams)
@@ -319,3 +321,71 @@ def downSample(aTrace, i):
 	else:
 		raise Exception('Only 1 and 2-dimensional arrays are allowed')
 	
+def latency(aTrace, at=None, vt=None, plot=False):
+	
+	"""
+	Determines the response latency in a signal, based on an accelation and/ or
+	velocity threshold.
+	
+	Arguments:
+	aTrace		--	input array
+	
+	Keyword arguments:
+	at			--	acceleration threshold (default=None)
+	vt	 		--	velocity threshold (default=None)
+	plot		--	indicates whether a plot should be shown (default=False)
+	
+	Returns:
+	The first sample where the acceleration or velocity threshold is exceeded
+	"""
+	
+	if at == None and vt == None:
+		raise Exception( \
+			'You must specify an accelation and/or velocity threshold')
+			
+	velTrace = aTrace[1:] - aTrace[:-1]
+	accTrace = velTrace[1:] - velTrace[:-1]
+	aLat = None
+	vLat = None
+	
+	if vt != None:
+		l = np.where(np.abs(velTrace) > vt)[0]
+		if len(l) > 0:
+			vLat = l[0]
+			
+	if at != None:
+		l = np.where(np.abs(accTrace) > at)[0]
+		if len(l) > 0:
+			aLat = l[0]			
+			
+	if aLat == None and vLat == None:
+		lat = None
+	elif aLat == None:
+		lat = vLat
+	elif vLat == None:
+		lat = aLat
+	else:
+		lat = min(aLat, vLat)
+	
+	if plot:
+		plt.subplot(311)
+		plt.plot(aTrace)		
+		if lat != None:
+			plt.axvline(lat)		
+		plt.subplot(312)
+		plt.plot(velTrace)
+		if vt != None:
+			plt.axhline(vt, color='red')
+		if lat != None:
+			plt.axvline(lat)		
+		plt.axhline()
+		plt.subplot(313)
+		plt.plot(accTrace)
+		if at != None:
+			plt.axhline(at, color='red')		
+		if lat != None:
+			plt.axvline(lat)		
+		plt.axhline()
+		plt.show()		
+	
+	return lat
