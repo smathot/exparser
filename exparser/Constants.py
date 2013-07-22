@@ -24,3 +24,4 @@ plotLineSymbols = ['o-'] * 100
 plotLineWidth = 1
 plotLineStyles = ['-'] * 100
 capSize = 0
+strDType = '|S128'

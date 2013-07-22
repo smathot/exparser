@@ -32,7 +32,7 @@ class EyelinkAscFolderReader(BaseReader):
 	def __init__(self, path='data', ext='.asc', startTrialKey='start_trial', \
 		endTrialKey='stop_trial', variableKey='var', dtype='|S128', maxN=None, \
 		maxTrialId=None, requireEndTrial=True, traceFolder='traces', \
-		offlineDriftCorr=False):
+		offlineDriftCorr=False, skipList=[], blinkReconstruct=False):
 
 		"""
 		Constructor. Reads all Eyelink ASCII files from a specific folder.
@@ -62,6 +62,10 @@ class EyelinkAscFolderReader(BaseReader):
 								in case the 'active' drift correctrion is
 								disabled (as on the Eyelink 1000).
 								(default=False)
+		skipList		--	A list of trialIDs that should not be processed.
+							(default=[])
+		blinkReconstruct	--	Indicates whether pupil size should be
+								interpolated during blinks. (default=False)
 		"""
 
 		self.startTrialKey = startTrialKey
@@ -75,6 +79,8 @@ class EyelinkAscFolderReader(BaseReader):
 		self.traceSmoothParams = None
 		self.offlineDriftCorr = offlineDriftCorr
 		self.driftAdjust = 0,0
+		self.skipList = skipList
+		self.blinkReconstruct = blinkReconstruct
 
 		print '\nScanning \'%s\'' % path
 		self.dm = None
@@ -186,19 +192,26 @@ class EyelinkAscFolderReader(BaseReader):
 
 		nPhase = len(self.traceDict)
 		i = 1
+		if '--traceplot' in sys.argv or '--traceimg' in sys.argv:
+			plt.clf()
+			plt.close()
+			plt.figure(figsize=(12,12))
+			plt.subplots_adjust(hspace=.5, wspace=.5)
 		for phase, trace in self.traceDict.iteritems():
 			a = np.array(trace, dtype=float)
-			if self.traceSmoothParams != None:				
-				origA = a.copy()
-				a[:,0] = TraceKit.smooth(a[:, 0], **self.traceSmoothParams)
-				a[:,1] = TraceKit.smooth(a[:, 1], **self.traceSmoothParams)				
-				a[:,2] = TraceKit.smooth(a[:, 2], **self.traceSmoothParams)
+			origA = a.copy()
+			if self.blinkReconstruct:
+				a[:,2] = TraceKit.blinkReconstruct(a[:,2])
+			if self.traceSmoothParams != None:
+				a[:,0] = TraceKit.smooth(a[:,0], **self.traceSmoothParams)
+				a[:,1] = TraceKit.smooth(a[:,1], **self.traceSmoothParams)
+				a[:,2] = TraceKit.smooth(a[:,2], **self.traceSmoothParams)
 			self.traceDict[phase] = a
 			path = os.path.join(self.traceFolder, '%s-%.5d-%s.npy' \
 				% (trialDict['file'], trialDict['trialId'], phase))
 			np.save(path, a)		
 			trialDict['__trace_%s__' % phase] = path
-			if '--traceplot' in sys.argv:				
+			if '--traceplot' in sys.argv or '--traceimg' in sys.argv:
 				plt.subplot(nPhase, 3, i)
 				i += 1
 				plt.title('X(%s)' % phase)
@@ -215,11 +228,16 @@ class EyelinkAscFolderReader(BaseReader):
 				i += 1
 				plt.title('Pupil(%s)' % phase)
 				plt.plot(a[:,2])	
-				if self.traceSmoothParams != None:
+				if self.traceSmoothParams != None or self.blinkReconstruct:
 					plt.plot(origA[:,2])
-		if '--traceplot' in sys.argv:
+		if '--traceplot' in sys.argv or '--traceimg' in sys.argv:
 			plt.suptitle(path)
-			plt.show()
+			if '--traceimg' in sys.argv:
+				path = os.path.join(self.traceFolder, 'png', '%s-%.5d-%s.png' \
+					% (trialDict['file'], trialDict['trialId'], phase))
+				plt.savefig(path)
+			if '--traceplot' in sys.argv:
+				plt.show()
 
 	def __initTrial__(self, trialDict):
 
@@ -326,9 +344,9 @@ class EyelinkAscFolderReader(BaseReader):
 
 		trialDict = {'trialId' : trialId, 'file' : os.path.basename(fd.name), \
 			'outlier' : 0, 'eye_used' : 'undefined', 'n_blink' : 0}
-		self.__initTrial__(trialDict) # Internal stuff
-		self.initTrial(trialDict) # To be overridden 		
-
+		if trialDict['trialId'] not in self.skipList:
+			self.__initTrial__(trialDict) # Internal stuff
+			self.initTrial(trialDict) # To be overridden
 		self.inBlink = False
 		while True:
 			s = fd.readline()
@@ -336,9 +354,12 @@ class EyelinkAscFolderReader(BaseReader):
 				break
 			l = self.strToList(s)
 			if self.endTrial(l):
-				self.__finishTrial__(trialDict) # Internal stuff
-				self.finishTrial(trialDict) # To be overridden 				
+				if trialDict['trialId'] not in self.skipList:
+					self.__finishTrial__(trialDict) # Internal stuff
+					self.finishTrial(trialDict) # To be overridden
 				return trialDict
+			if trialDict['trialId'] in self.skipList:
+				continue
 			if self.startBlink(l):
 				self.inBlink = True
 				trialDict['n_blink'] += 1
@@ -373,10 +394,7 @@ class EyelinkAscFolderReader(BaseReader):
 			return
 		if self.tracePhase not in self.traceDict:
 			self.traceDict[self.tracePhase] = []			
-		if self.inBlink:
-			self.traceDict[self.tracePhase].append( (np.nan, np.nan, np.nan) )
-		else:
-			self.traceDict[self.tracePhase].append( (s['x'], s['y'], s['pupil']) )
+		self.traceDict[self.tracePhase].append( (s['x'], s['y'], s['pupil']) )
 
 	def parseVariables(self, trialDict, l):
 
@@ -481,6 +499,10 @@ class EyelinkAscFolderReader(BaseReader):
 		# Timestamp x y pupil size ...
 		4815155   168.2   406.5  2141.0 ...
 
+		or (during blinks)
+		661781	   .	   .	    0.0	...
+
+
 		Arguments:
 		l -- a list
 
@@ -494,9 +516,18 @@ class EyelinkAscFolderReader(BaseReader):
 		try:
 			sample = {}
 			sample["time"] = int(l[0])
-			sample["x"] = float(l[1]) - self.driftAdjust[0]
-			sample["y"] = float(l[2]) - self.driftAdjust[1]
-			sample['pupil'] = float(l[3])
+			if l[1] == '.':
+				sample['x'] = np.nan
+			else:
+				sample["x"] = float(l[1]) - self.driftAdjust[0]
+			if l[2] == '.':
+				sample["y"] = np.nan
+			else:
+				sample["y"] = float(l[2]) - self.driftAdjust[1]
+			if l[3] == 0:
+				sample['pupil'] = np.nan
+			else:
+				sample['pupil'] = float(l[3])
 			return sample
 		except:
 			return None

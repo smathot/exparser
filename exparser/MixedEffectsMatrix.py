@@ -62,7 +62,7 @@ class MixedEffectsMatrix(BaseMatrix):
 		lme4 = importr('lme4')
 		utils = importr('utils')
 		langR = importr('languageR')
-
+		
 		if type(dv) == types.FunctionType:
 			sdv = dv.__name__
 		else:
@@ -102,6 +102,7 @@ class MixedEffectsMatrix(BaseMatrix):
 			if lModel[i] == 'Fixed effects:':
 				break
 		i += 2				
+		print self.model, self._formula
 		self.pVals = langR.pvals_fnc(self.model, nsim=nSim, ndigits=10)
 
 		## Convert the results into a Matrix for easy reading
@@ -112,7 +113,6 @@ class MixedEffectsMatrix(BaseMatrix):
 			slope = float(self.pVals[0][0][r])
 			ci95low = float(self.pVals[0][2][r])
 			ci95high = float(self.pVals[0][3][r])
-			print lModel[i+r]
 			t = float(lModel[i+r].split()[3])
 			se = float(lModel[i+r].split()[2])
 			p = float(self.pVals[0][5][r])

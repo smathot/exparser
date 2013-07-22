@@ -22,10 +22,12 @@ import numpy as np
 from numpy import ma
 from numpy.lib import recfunctions
 from scipy import stats
+from scipy.stats.stats import nanmean, nanstd, nanmedian
 from copy import deepcopy
 from itertools import product
 from exparser.BaseMatrix import BaseMatrix
 from exparser.PivotMatrix import PivotMatrix
+from exparser import Constants
 
 class DataMatrix(BaseMatrix):
 
@@ -67,7 +69,7 @@ class DataMatrix(BaseMatrix):
 					np.array(a[vName], dtype=np.float64)
 					dtype.append( (vName, np.float64) )
 				except:
-					dtype.append( (vName, '|S128') )
+					dtype.append( (vName, Constants.strDType) )
 			self.m = np.array(a, dtype=dtype)
 			return
 
@@ -87,7 +89,7 @@ class DataMatrix(BaseMatrix):
 					for v in _vVals[i]: float(v)
 					dtype.append( (vNames[i], np.float64) )
 				except:
-					dtype.append( (vNames[i], '|S128') )
+					dtype.append( (vNames[i], Constants.strDType) )
 
 		# Fill the structured array row by row
 		self.m = np.zeros( len(vVals), dtype=dtype)
@@ -130,7 +132,7 @@ class DataMatrix(BaseMatrix):
 			return DataMatrix(a, structured=True)
 		elif isinstance(vName, basestring):
 			return self.m[vName]
-		elif isinstance(vName, slice):
+		elif isinstance(vName, slice) or isinstance(vName, list):
 			return DataMatrix(self.m[vName], structured=True)
 		else:
 			raise Exception('Cannot get %s (%s)' % (vName, type(vName)))
@@ -196,22 +198,24 @@ class DataMatrix(BaseMatrix):
 
 		return DataMatrixIterator(self)
 
-	def addField(self, vName, dtype=np.int32):
+	def addField(self, vName, dtype=np.int32, default=None):
 
 		"""
+		Creates a new DataMatrix that is a copy of the current DataMatrix with
+		an additional field.
+		
 		Modified from: <http://stackoverflow.com/questions/1201817/\
-			adding-a-field-to-a-structured-numpy-array>
-
-		Return a new array that is like "a", but has additional fields. The
-		contents of "a" are copied over to the appropriate fields in the new
-		array, whereas the new fields are uninitialized.  The arguments are not
-		modified.
+			adding-a-field-to-a-structured-numpy-array>		
 
 		Arguments:
-		descr -- a numpy type description of the new fields
+		vName		--	The name of the new field.
+		
+		Keyword arguments:
+		dtype		--	The dtype for the new field. (default=np.int32)
+		default		--	The default value or None for no default. (default=None)
 
 		Returns:
-		A DataMatrix
+		A DataMatrix.
 		"""
 
 		if vName in self.columns():
@@ -219,7 +223,10 @@ class DataMatrix(BaseMatrix):
 		a = np.zeros(self.m.shape, dtype=self.m.dtype.descr + [(vName, dtype)])
 		for name in self.m.dtype.names:
 			a[name] = self.m[name]
-		return DataMatrix(a, structured=True)
+		dm = DataMatrix(a, structured=True)
+		if default != None:
+			dm[vName] = default
+		return dm		
 
 	def asArray(self):
 
@@ -289,6 +296,9 @@ class DataMatrix(BaseMatrix):
 		the vName variable
 		"""
 
+		if isinstance(keys, basestring):
+			keys = [keys]
+
 		m = [keys + ['mean', 'median', 'std', 'se', '95ci', 'count']]
 		for g in self.group(keys):
 			l = []
@@ -303,11 +313,11 @@ class DataMatrix(BaseMatrix):
 				l.append(len(g))
 			else:
 				a = g[vName]
-				l.append(a.mean())
-				l.append(np.median(a))
-				l.append(a.std())
-				l.append(a.std()/np.sqrt(a.size))
-				l.append(1.96*a.std()/np.sqrt(a.size))
+				l.append(nanmean(a))
+				l.append(nanmedian(a))
+				l.append(nanstd(a))
+				l.append(nanstd(a)/np.sqrt(a.size))
+				l.append(1.96*nanstd(a)/np.sqrt(a.size))
 				l.append(a.size)
 			m.append(l)
 		return DataMatrix(m)
@@ -347,6 +357,27 @@ class DataMatrix(BaseMatrix):
 			dm = DataMatrix(a, structured=True)
 			l.append(dm)
 		return l
+
+	def indices(self, query):
+
+		"""
+		Return the indices of all rows that match the query.
+
+		Arguments:
+		query -- a query, e.g. 'rt > 1000'
+
+		Returns:
+		A list of indices.
+		"""
+
+		l = query.split(' ')
+		vName = l[0]
+		op = l[1]
+		test = query[len(vName)+len(op)+1:]
+		flt = eval('self.m[vName] %s %s' % (op, test))
+		if type(flt) == bool: # The whole array is selected
+			return range(len(self))
+		return flt
 
 	def intertrialer(self, keys, dv, _range=[1]):
 
@@ -390,12 +421,13 @@ class DataMatrix(BaseMatrix):
 		columns).
 
 		Arguments:
-		key -- the name of the variable to recode, or a list of names to recode
-			   multiple variables in one go
-		coding -- an (oldValue, newValue) tuple, or a list of tuples to handle
-				  multiple recodings in one go
+		key 	--	The name of the variable to recode, or a list of names to
+					recode multiple variables in one go.
+		coding	--	An (oldValue, newValue) tuple, a list of tuples to handle
+					multiple recodings in one go, or a function that takes a
+					value and returns the recoded value.
 		"""
-
+		
 		if type(key) == list:
 			for _key in key:
 				self.recode(_key, coding)
@@ -405,10 +437,38 @@ class DataMatrix(BaseMatrix):
 			for _coding in coding:
 				self.recode(key, _coding)
 			return
+		elif hasattr(coding, '__call__'):
+			for i in range(len(self.m)):
+				self.m[key][i] = coding(self.m[key][i])
+		else:
+			oldValue, newValue = coding
+			i = np.where(self.m[key] == oldValue)
+			self.m[key][i] = newValue
 
-		oldValue, newValue = coding
-		i = np.where(self.m[key] == oldValue)
-		self.m[key][i] = newValue
+	def removeField(self, vName):
+
+		"""
+		Return a DataMatrix that is a copy of the current DataMatrix without the
+		specified field.
+
+		Arguments:
+		vName	--	The name of the field to be removed.
+
+		Returns:
+		A DataMatrix
+		"""
+
+		newDtype = []
+		for i in range(len(self.m.dtype)):
+			_vName = self.m.dtype.names[i]
+			_dtype = self.m.dtype[i]
+			if _vName != vName:
+				newDtype.append( (_vName, _dtype) )
+		a = np.zeros(self.m.shape, dtype=newDtype)
+		for name in self.m.dtype.names:
+			if name != vName:
+				a[name] = self.m[name]
+		return DataMatrix(a, structured=True)
 
 	def rename(self, oldKey, newKey):
 
@@ -530,7 +590,7 @@ class DataMatrix(BaseMatrix):
 
 		# Create a dummy field that combines the keys, so we can simply group
 		# based on one key
-		dm = dm.addField('__dummyCond__', dtype=str)
+		dm = dm.addField('__dummyCond__', dtype=str, default='__dummy__')
 		for key in keys:
 			for i in range(len(dm)):
 				dm['__dummyCond__'][i] += str(dm[key][i]) + '__'
@@ -567,7 +627,14 @@ class DataMatrix(BaseMatrix):
 		
 		"""Shuffles the datamatrix in place"""
 		
-		np.random.shuffle(self.m)
+		#np.random.shuffle(self.m)
+		
+		# Directly shuffling the array does not preserve all items! This seems
+		# to be a bug in numpy. This workaround preserves the integrity of the
+		# DataMatrix.
+		l = list(self.m)
+		np.random.shuffle(l)
+		self.m = np.array(l, dtype=self.m.dtype)
 
 	def sort(self, keys, ascending=True):
 
@@ -587,6 +654,69 @@ class DataMatrix(BaseMatrix):
 		self.m.sort(order=keys)
 		if not ascending:
 			self.m = self.m[::-1]
+
+	def ttest(self, keys, dv, paired=True, collapse=None):
+
+		"""
+		Performs t-tests between groups defined by a list of keys.
+
+		Arguments:
+		keys		--	A list of keys to define the groups.
+		dv			--	The dependent variable.
+
+		Keyword arguments:
+		paired		--	Determines whether a paired-samples t-test or an
+						independent samples t-test should be conducted.
+						(default=True)
+
+		collapse	--	A key to collapse the data on, so that you can do
+						t-tests on (subject) means. (default=None)
+
+		Returns:
+		A list of (desc, t, p) tuples
+		"""
+
+		from itertools import combinations
+		if paired:
+			from scipy.stats import ttest_rel as ttest
+		else:
+			from scipy.stats import ttest_ind as ttest
+
+		if collapse != None:
+			dm = self.collapse(collapse + keys, dv)
+			dv = 'mean'
+		else:
+			dm = self
+
+		_l = [['group', 'N', 'M / t', 'SE / p']]
+
+		lDm = dm.group(keys)
+		for l in combinations(lDm, 2):
+
+			group0 = ''
+			for key in keys:
+				group0 += l[0][key][0] + '_'
+			group0 = group0[:-1]
+
+			group1 = ''
+			for key in keys:
+				group1 += l[1][key][0] + '_'
+			group1 = group1[:-1]
+
+			N0 = len(l[0])
+			M0 = l[0][dv].mean()
+			SE0 = l[0][dv].std() / np.sqrt(len(l[0]))
+			_l.append( [group0, N0, M0, SE0] )
+
+			N1 = len(l[1])
+			M1 = l[1][dv].mean()
+			SE1 = l[1][dv].std() / np.sqrt(len(l[1]))
+			_l.append( [group1, N1, M1, SE1] )
+
+			t, p = ttest(l[0][dv], l[1][dv])
+			_l.append( [group0, group1, t, p] )
+
+		return DataMatrix(np.array(_l))
 
 	def unique(self, dv):
 

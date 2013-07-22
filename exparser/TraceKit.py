@@ -16,6 +16,7 @@ along with exparser.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 from scipy.stats import nanmean, nanmedian, nanstd, ttest_ind, linregress
+from scipy.interpolate import interp1d
 from matplotlib import pyplot as plt
 from matplotlib import mpl
 import numpy as np
@@ -163,7 +164,7 @@ def plotTraceAvg(ax, dm, avgFunc=nanmean, lineColor=blue[0], errColor=gray[1], \
 	ax.plot(xData, yData, color=lineColor, label=label)
 
 def mixedModelTrace(dm, fixedEffects, randomEffects, winSize=1, nSim=1000, \
-	**traceParams):
+	effectIndex=0, **traceParams):
 
 	"""
 	Perform a mixed model over a single trace. The dependent variable is
@@ -181,6 +182,10 @@ def mixedModelTrace(dm, fixedEffects, randomEffects, winSize=1, nSim=1000, \
 						for a quick look, it can be increased (default=1)
 	nSim			--	the number of similuations. This should be increased
 						for more accurate estimations (default=100)
+	effectIndex		--	The index of the effect that should be read from the
+						MixedEffectsMatrix. For example, if there are two
+						fixed effects, than 0 and 1 are the main effects, and
+						2 is the interaction. (default=0)
 	*traceParams	--	see getTrace()
 	
 	Returns:
@@ -207,9 +212,10 @@ def mixedModelTrace(dm, fixedEffects, randomEffects, winSize=1, nSim=1000, \
 		# Do mixed effects
 		mem = MixedEffectsMatrix(_dm, 'mmdv__', fixedEffects, \
 			randomEffects, nSim=nSim)
-		pVal = float(mem.asArray()[2][6])
-		ciLow = float(mem.asArray()[2][3])
-		ciHigh = float(mem.asArray()[2][4])
+		print mem
+		pVal = float(mem.asArray()[2+effectIndex][6])
+		ciLow = float(mem.asArray()[2+effectIndex][3])
+		ciHigh = float(mem.asArray()[2+effectIndex][4])
 		aPVal[i:i+winSize,0] = pVal
 		aPVal[i:i+winSize,1] = ciLow
 		aPVal[i:i+winSize,2] = ciHigh
@@ -217,7 +223,7 @@ def mixedModelTrace(dm, fixedEffects, randomEffects, winSize=1, nSim=1000, \
 		
 	return aPVal
 
-def markStats(ax, aPVal, alpha=.05, minSmp=10, color=gray[1]):
+def markStats(ax, aPVal, alpha=.05, minSmp=200, color=gray[1]):
 	
 	"""
 	Marks all timepoints in a figure with colored shading when the significance
@@ -389,3 +395,132 @@ def latency(aTrace, at=None, vt=None, plot=False):
 		plt.show()		
 	
 	return lat
+
+def blinkReconstruct(aTrace, vt=5, maxDur=500, margin=10, plot=False):
+
+	"""
+	Reconstructs pupil size during blinks.
+
+	Arguments:
+	aTrace		--	The input trace.
+
+	Keyword arguments:
+	pvt			--	The pupil velocity threshold. Lower tresholds more easily
+					trigger blinks (default=5.)
+	maxDur		--	The maximum duration for a blink. Longer blinks are
+					ignored. (default=500)
+	plot		--	Indicates whether the algorithm should be plotted.
+					(default=False)
+
+	Returns:
+	An array with the reconstructed pupil data or an (array, figure) tuple when
+	plot==True.
+	"""
+
+	# Create a copy of the signal, a smoothed version, and calculate the
+	# velocity profile.
+	aTrace = np.copy(aTrace)
+	sTrace = smooth(aTrace, windowLen=21)
+	vTrace = sTrace[1:]-sTrace[:-1]
+
+	if plot:
+		plt.clf()
+		fig = plt.figure(figsize=(10,5))
+		plt.rc("font", family='Liberation Sans')
+		plt.rc("font", size=10)
+		plt.subplots_adjust(wspace=.25, hspace=.4)
+		plt.subplot(2,2,1)
+		plt.title('Original signal')
+		plt.plot(aTrace, color=blue[1])
+		plt.xlabel('Time (ms)')
+		plt.ylabel('Pupil size (arbitrary units)')
+		plt.subplot(2,2,2)
+		plt.title('Smoothed signal')
+		plt.plot(sTrace, color=blue[1])
+		plt.xlabel('Time (ms)')
+		plt.ylabel('Pupil size (arbitrary units)')
+		plt.subplot(2,2,3)
+		plt.title('Velocity profile')
+		plt.plot(vTrace, color=blue[1])
+		plt.xlabel('Time (ms)')
+		plt.ylabel('Velocity (arbitrary units)')
+
+	# Start blink detection
+	iFrom = 0
+	lBlink = []
+	while True:
+		# The onset of the blink is the moment at which the pupil velocity
+		# exceeds the threshold.
+		l = np.where(vTrace[iFrom:] < -vt)[0]
+		if len(l) == 0:
+			break # No blink detected
+		iStart = l[0]+iFrom
+		if iFrom == iStart:
+			break
+		# The reversal period is the moment at which the pupil starts to dilate
+		# again with a velocity above threshold.
+		l = np.where(vTrace[iStart:] > vt)[0]
+		if len(l) == 0:
+			iFrom = iStart
+			continue
+		iMid = l[0]+iStart
+		# The end blink period is the moment at which the pupil velocity drops
+		# back to zero again.
+		l = np.where(vTrace[iMid:] < 0)[0]
+		if len(l) == 0:
+			iFrom = iMid
+			continue
+		iEnd = l[0]+iMid
+		iFrom = iEnd
+		# We generally underestimate the blink period, so compensate for this
+		if iStart-margin >= 0:
+			iStart -= margin
+		if iEnd+margin < len(aTrace):
+			iEnd += margin
+		# We don't accept blinks that are too long, because blinks are not
+		# generally very long (although they can be).
+		if iEnd-iStart > maxDur:
+			continue
+		if plot:
+			plt.axvspan(iStart, iEnd, color=gray[-1], alpha=.4)
+		lBlink.append( (iStart, iEnd) )
+
+	if plot:
+		plt.subplot(2,2,4)
+		plt.title('Reconstructed signal')
+
+	# Now reconstruct the trace during the blinks
+	for iStart, iEnd in lBlink:
+		# First create a list of (when possible) four data points that we can
+		# use for interpolation.
+		dur = iEnd - iStart
+		l = []
+		if iStart-dur >= 0:
+			l += [iStart-dur]
+		l += [iStart, iEnd]
+		if iEnd+dur < len(sTrace):
+			l += [iEnd+dur]
+		x = np.array(l)
+		# If the list is long enough we use cubic interpolation, otherwise we
+		# use linear interpolation
+		y = aTrace[x]
+
+		if plot:
+			plt.plot(x, y, 'o', color=orange[1])
+
+		if len(x) >= 4:
+			f2 = interp1d(x, y, kind='cubic')
+		else:
+			f2 = interp1d(x, y)
+		xInt = np.arange(iStart, iEnd)
+		yInt = f2(xInt)
+		aTrace[xInt] = yInt
+
+	if plot:
+		plt.plot(aTrace, color=blue[1])
+		plt.xlabel('Time (ms)')
+		plt.ylabel('Pupil size (arbitrary units)')
+
+	if plot:
+		return aTrace, fig
+	return aTrace
