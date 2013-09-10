@@ -127,7 +127,8 @@ def getTraceAvg(dm, avgFunc=nanmean, **traceParams):
 	return xData, yData, errData
 
 def plotTraceAvg(ax, dm, avgFunc=nanmean, lineColor=blue[0], errColor=gray[1], \
-	errAlpha=.4, label=None, _downSample=None, aErr=None, **traceParams):
+	errAlpha=.4, label=None, _downSample=None, aErr=None, \
+	orientation='horizontal', **traceParams):
 		
 	"""
 	Plots a single average trace
@@ -148,6 +149,7 @@ def plotTraceAvg(ax, dm, avgFunc=nanmean, lineColor=blue[0], errColor=gray[1], \
 						of the plot. (default=None)
 	aErr			--	a 2-D array to use to draw the error shading, or None
 						to use the error data calculated by getTraceAvg()
+	orientation		--	'horizontal' or 'vertical'. (default='horizontal')
 	*traceParams	--	see getTrace()
 	"""
 
@@ -158,10 +160,16 @@ def plotTraceAvg(ax, dm, avgFunc=nanmean, lineColor=blue[0], errColor=gray[1], \
 		xData = downSample(xData, _downSample)
 		yData = downSample(yData, _downSample)
 		errData = downSample(errData, _downSample)
-	if errColor != None:
-		ax.fill_between(xData, yData-errData[0], yData+errData[1], \
-			color=errColor, alpha=errAlpha)
-	ax.plot(xData, yData, color=lineColor, label=label)
+	if orientation == 'horizontal':
+		ax.plot(xData, yData, color=lineColor, label=label)
+		if errColor != None:
+			ax.fill_between(xData, yData-errData[0], yData+errData[1], \
+				color=errColor, alpha=errAlpha)
+	else:
+		ax.plot(yData, xData, color=lineColor, label=label)
+		if errColor != None:
+			ax.fill_betweenx(xData, yData-errData[0], yData+errData[1], \
+				color=errColor, alpha=errAlpha)
 
 def mixedModelTrace(dm, fixedEffects, randomEffects, winSize=1, nSim=1000, \
 	effectIndex=0, **traceParams):

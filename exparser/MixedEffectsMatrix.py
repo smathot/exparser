@@ -102,7 +102,7 @@ class MixedEffectsMatrix(BaseMatrix):
 			if lModel[i] == 'Fixed effects:':
 				break
 		i += 2				
-		print self.model, self._formula
+		#print self.model, self._formula
 		self.pVals = langR.pvals_fnc(self.model, nsim=nSim, ndigits=10)
 
 		## Convert the results into a Matrix for easy reading

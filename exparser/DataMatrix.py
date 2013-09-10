@@ -339,6 +339,20 @@ class DataMatrix(BaseMatrix):
 		if dtype:
 			return self.m.dtype.descr
 		return list(self.m.dtype.names)
+	
+	def count(self, dv):
+		
+		"""
+		Returns the number of different values for a given variable.
+		
+		Arguments:
+		dv	--	The variable to count.
+		
+		Returns:
+		The number of different values for 'dv'.
+		"""
+		
+		return len(self.unique(dv))
 
 	def explode(self, N):
 
@@ -413,6 +427,17 @@ class DataMatrix(BaseMatrix):
 			else:
 				dm[v][i:] = dm[dv][:-i]
 		return dm
+	
+	def range(self):
+		
+		"""
+		Gives a list of indices to walk through the current DataMatrix.
+		
+		Returns:
+		A list of indices.
+		"""
+		
+		return range(len(self))
 
 	def recode(self, key, coding):
 
@@ -731,6 +756,25 @@ class DataMatrix(BaseMatrix):
 		"""
 
 		return np.unique(self[dv])
+	
+	def where(self, query):
+
+		"""
+		Return indices corresponding to the query.
+
+		Arguments:
+		query -- a query, e.g. 'rt > 1000'
+
+		Returns:
+		A list of indices
+		"""
+
+		l = query.split(' ')
+		vName = l[0]
+		op = l[1]
+		test = query[len(vName)+len(op)+1:]
+		flt = np.where(eval('self.m[vName] %s %s' % (op, test)))
+		return flt
 
 	def withinize(self, vName, targetVName, key, verbose=True, whiten=False):
 
