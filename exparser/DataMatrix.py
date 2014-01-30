@@ -21,6 +21,7 @@ import warnings
 import numpy as np
 from numpy import ma
 from numpy.lib import recfunctions
+from scipy.spatial.distance import cdist
 from scipy import stats
 from scipy.stats.stats import nanmean, nanstd, nanmedian
 from copy import deepcopy
@@ -43,20 +44,20 @@ class DataMatrix(BaseMatrix):
 		Arguments:
 		a -- a np array or list. It can also be a filename, in which case it
 			 will be interpreted as a .npy file.
-			
+
 
 		Keyword arguments:
 		structured -- indicates whether the passed array is structured. If not,
 					  a structured array will be created, assuming that the
 					  first row contains the column names. (default=False)
 		"""
-		
+
 		# Load from disk
 		if isinstance(a, basestring):
 			a = np.load(a)
-		
+
 		# Try to convert lists to arrays
-		if type(a) == list:
+		if isinstance(a, list):
 			a = np.array(a)
 
 		# If a structured array was passed, we still need to convert it, to
@@ -70,7 +71,11 @@ class DataMatrix(BaseMatrix):
 					dtype.append( (vName, np.float64) )
 				except:
 					dtype.append( (vName, Constants.strDType) )
-			self.m = np.array(a, dtype=dtype)
+			try:
+				self.m = np.array(a, dtype=dtype)
+			except Exception as e:
+				raise Exception('Failed to convert %s (original exception %s)' \
+					% (a, e))
 			return
 
 		# Extract the variable names (first row) and values (the rest)
@@ -111,8 +116,8 @@ class DataMatrix(BaseMatrix):
 		"""
 		Returns a column, index, or slice. Valid calls are. Note that some
 		operations return a copy of the DataMatrix, so they cannot be used to
-		modify the contents of the DataMatrix. 
-		
+		modify the contents of the DataMatrix.
+
 		Exmaple:
 		>>> dm[0]['rt'] = 1 # This doesn't alter the original DataMatrix
 		>>> dm['rt'][0] = 1 # This does!
@@ -171,12 +176,12 @@ class DataMatrix(BaseMatrix):
 			if self[col].dtype != dm[col].dtype:
 				warnings.warn( \
 					'%s has non-matching types (%s and %s)' \
-					% (col, self[col].dtype, dm[col].dtype))										
+					% (col, self[col].dtype, dm[col].dtype))
 				a1 = np.array(self[col], dtype='|S128')
 				a2 = np.array(dm[col], dtype='|S128')
-				a[1:, i] = np.concatenate( (a1, a2) )		
+				a[1:, i] = np.concatenate( (a1, a2) )
 			else:
-				a[1:, i] = np.concatenate( (self[col], dm[col]) )		
+				a[1:, i] = np.concatenate( (self[col], dm[col]) )
 			i += 1
 		return DataMatrix(a)
 
@@ -203,13 +208,13 @@ class DataMatrix(BaseMatrix):
 		"""
 		Creates a new DataMatrix that is a copy of the current DataMatrix with
 		an additional field.
-		
+
 		Modified from: <http://stackoverflow.com/questions/1201817/\
-			adding-a-field-to-a-structured-numpy-array>		
+			adding-a-field-to-a-structured-numpy-array>
 
 		Arguments:
 		vName		--	The name of the new field.
-		
+
 		Keyword arguments:
 		dtype		--	The dtype for the new field. (default=np.int32)
 		default		--	The default value or None for no default. (default=None)
@@ -226,7 +231,7 @@ class DataMatrix(BaseMatrix):
 		dm = DataMatrix(a, structured=True)
 		if default != None:
 			dm[vName] = default
-		return dm		
+		return dm
 
 	def asArray(self):
 
@@ -239,6 +244,74 @@ class DataMatrix(BaseMatrix):
 		for row in self.m:
 			l.append(list(row))
 		return np.array(l, dtype='|S128')
+
+	def balance(self, col, maxErr, ref=0):
+
+		"""
+		Filters the data such that a given column is on average close to a
+		reference value, and is symetrically and normally distributed.
+
+		Arguments:
+		col		--	The column to balance.
+		maxErr	--	The maximum mean error relative to the reference value.
+
+		Keyword arguments:
+		ref		--	The reference value. (default=0)
+
+		Returns:
+		A balanced copy of the current DataMatrix.
+		"""
+
+		dm = self.clone()
+
+		# Create a distance matrix for the values, with the diagonal set to nan
+		a = dm[col] - ref
+		a.shape = len(a), 1 # cdist requires 2D array
+		d = cdist(a, -a)
+		np.fill_diagonal(d, np.nan)
+
+		# Create the best matching matrix
+		pairs = []
+		while False in np.isnan(d):
+			c, r = np.where(d == np.nanmin(d))
+			i1 = c[0]
+			i2 = r[0]
+			#print '%s -> %s' % (i1, i2)
+			err = abs(a[i1][0]+a[i2][0])
+			pairs.append( (i1, i2, err) )
+			d[i1] = np.nan
+			d[:,i1] = np.nan
+			d[i2] = np.nan
+			d[:,i2] = np.nan
+		# Mark rows in a pairwise until the overall error is low enough.
+		toRemove = []
+		_dm = dm.clone()
+		while True:
+			err = _dm[col].mean()
+			print 'Error = %f' % err
+			#if abs(err) <= maxErr:
+				#print 'Done!'
+				#break
+			if len(pairs) == 1:
+				#print 'Set exhausted'
+				break
+			i1, i2, err = pairs.pop()
+			v1 = dm[col][i1]
+			v2 = dm[col][i2]
+			pErr = v2+v1
+
+			if abs(pErr) <= maxErr:
+				break
+
+			#print 'Marking rows %d and %d for removal' % (i1, i2)
+			toRemove += [i1, i2]
+			_dm.m = np.delete(dm.m, toRemove)
+			#print '%f - %f = %f' % (v1, v2, v2+v1)
+
+		# Remove rows
+		dm = dm.addField('__unbalanced__', dtype=int, default=0)
+		dm['__unbalanced__'][toRemove] = 1
+		return dm
 
 	def calcPerc(self, vName, targetVName, keys=None, nBin=None):
 
@@ -339,28 +412,29 @@ class DataMatrix(BaseMatrix):
 		if dtype:
 			return self.m.dtype.descr
 		return list(self.m.dtype.names)
-	
+
 	def count(self, dv):
-		
+
 		"""
 		Returns the number of different values for a given variable.
-		
+
 		Arguments:
 		dv	--	The variable to count.
-		
+
 		Returns:
 		The number of different values for 'dv'.
 		"""
-		
+
 		return len(self.unique(dv))
 
 	def explode(self, N):
 
 		"""
-		Break up the DataMatrix in N smaller DataMatrices
+		Break up the DataMatrix in N smaller DataMatrices. For splitting a
+		DataMatrix based on column values, see `DataMatrix.split()`.
 
 		Arguments:
-		N		--	the number of DataMatrices to explode in
+		N		--	the number of DataMatrices to explode in.
 
 		Returns:
 		A list of DataMatrices
@@ -427,16 +501,16 @@ class DataMatrix(BaseMatrix):
 			else:
 				dm[v][i:] = dm[dv][:-i]
 		return dm
-	
+
 	def range(self):
-		
+
 		"""
 		Gives a list of indices to walk through the current DataMatrix.
-		
+
 		Returns:
 		A list of indices.
 		"""
-		
+
 		return range(len(self))
 
 	def recode(self, key, coding):
@@ -452,7 +526,7 @@ class DataMatrix(BaseMatrix):
 					multiple recodings in one go, or a function that takes a
 					value and returns the recoded value.
 		"""
-		
+
 		if type(key) == list:
 			for _key in key:
 				self.recode(_key, coding)
@@ -469,6 +543,25 @@ class DataMatrix(BaseMatrix):
 			oldValue, newValue = coding
 			i = np.where(self.m[key] == oldValue)
 			self.m[key][i] = newValue
+
+	def removeNan(self, key):
+
+		"""
+		Remove all rows where the specified key is nan.
+
+		Arguments:
+		key		--	A key that should not have any nan values.
+
+		Returns:
+		A DataMatrix.
+		"""
+
+		i = np.where(~np.isnan(self.m[key]))[0]
+		print i
+		print 'Removing %d rows' % len(i)
+		dm = DataMatrix(self.m[i], structured=True)
+		print dm.m.dtype
+		return dm
 
 	def removeField(self, vName):
 
@@ -507,7 +600,8 @@ class DataMatrix(BaseMatrix):
 		"""
 
 		dtype = []
-		for key, _type in self.m.dtype:
+		for key in self.m.dtype.names:
+			_type = self.m.dtype[key]
 			if key == oldKey:
 				key = newKey
 			dtype.append( (key, _type) )
@@ -587,6 +681,25 @@ class DataMatrix(BaseMatrix):
 			BaseMatrix(a)._print()
 		return dm
 
+	def selectColumns(self, keys):
+
+		"""
+		Creates a new DataMatrix with only the specified columns.
+
+		Arguments:
+		key		--	A column or list of columns to select.
+
+		Returns:
+		A new DataMatrix.
+		"""
+
+		if isinstance(keys, basestring):
+			keys = [keys]
+		for key in keys:
+			if key not in self.columns():
+				raise Exception('The column "%s" does not exist' % key)
+		return DataMatrix(self.m[keys], structured=True)
+
 	def selectByStdDev(self, keys, dv, thr=2.5, verbose=False):
 
 		"""
@@ -647,13 +760,13 @@ class DataMatrix(BaseMatrix):
 		dm = dm.select('__stdOutlier__ == 0')
 		print
 		return dm
-	
+
 	def shuffle(self):
-		
+
 		"""Shuffles the datamatrix in place"""
-		
+
 		#np.random.shuffle(self.m)
-		
+
 		# Directly shuffling the array does not preserve all items! This seems
 		# to be a bug in numpy. This workaround preserves the integrity of the
 		# DataMatrix.
@@ -679,6 +792,44 @@ class DataMatrix(BaseMatrix):
 		self.m.sort(order=keys)
 		if not ascending:
 			self.m = self.m[::-1]
+
+	def split(self, col):
+
+		"""
+		Splits the DataMatrix in chunks such that each chunk only has the same
+		value for the specified column. For splitting a DataMatrix into
+		equally sized parts, see `DataMatrix.explode()`.
+
+		For example (column b shown as row for convenience):
+
+		b 0 0 1 1 2
+
+		Would be split into:
+
+		b 0 0
+		b 1 1
+		b 2
+
+		Arguments:
+		col		--	The column name.
+
+		Returns:
+		A list of DataMatrices.
+		"""
+
+		l = []
+		start_index = 0
+		i = 0
+		val = self[col][0] # Starting value
+		while i < len(self)-1:
+			i += 1
+			_val = self[col][i]
+			if _val != val:
+				l.append(self[start_index:i])
+				start_index = i
+				val = _val
+		l.append(self[start_index:i+1])
+		return l
 
 	def ttest(self, keys, dv, paired=True, collapse=None):
 
@@ -720,12 +871,12 @@ class DataMatrix(BaseMatrix):
 
 			group0 = ''
 			for key in keys:
-				group0 += l[0][key][0] + '_'
+				group0 += str(l[0][key][0]) + '_'
 			group0 = group0[:-1]
 
 			group1 = ''
 			for key in keys:
-				group1 += l[1][key][0] + '_'
+				group1 += str(l[1][key][0]) + '_'
 			group1 = group1[:-1]
 
 			N0 = len(l[0])
@@ -755,8 +906,8 @@ class DataMatrix(BaseMatrix):
 		An array of unique values for dv
 		"""
 
-		return np.unique(self[dv])
-	
+		return list(np.unique(self[dv]))
+
 	def where(self, query):
 
 		"""
@@ -774,7 +925,7 @@ class DataMatrix(BaseMatrix):
 		op = l[1]
 		test = query[len(vName)+len(op)+1:]
 		flt = np.where(eval('self.m[vName] %s %s' % (op, test)))
-		return flt
+		return flt[0]
 
 	def withinize(self, vName, targetVName, key, verbose=True, whiten=False):
 

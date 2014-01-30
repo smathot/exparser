@@ -32,7 +32,7 @@ class EyelinkAscFolderReader(BaseReader):
 	def __init__(self, path='data', ext='.asc', startTrialKey='start_trial', \
 		endTrialKey='stop_trial', variableKey='var', dtype='|S128', maxN=None, \
 		maxTrialId=None, requireEndTrial=True, traceFolder='traces', \
-		offlineDriftCorr=False, skipList=[], blinkReconstruct=False):
+		offlineDriftCorr=False, skipList=[], blinkReconstruct=False, only=None):
 
 		"""
 		Constructor. Reads all Eyelink ASCII files from a specific folder.
@@ -66,6 +66,9 @@ class EyelinkAscFolderReader(BaseReader):
 							(default=[])
 		blinkReconstruct	--	Indicates whether pupil size should be
 								interpolated during blinks. (default=False)
+		only			--	A list of files that should be analyzed, or None
+							to analyze all files. Mostly useful for debugging
+							purposes. (default=None)
 		"""
 
 		self.startTrialKey = startTrialKey
@@ -86,8 +89,12 @@ class EyelinkAscFolderReader(BaseReader):
 		self.dm = None
 		nFile = 0
 		for fname in os.listdir(path):
+			if only != None and fname not in only:
+				print 'Skipping %s ...' % fname
+				continue
 			if os.path.splitext(fname)[1] == ext:
-				print 'Reading %s ...' % fname,
+				sys.stdout.write('Reading %s ...' % fname)
+				sys.stdout.flush()
 				a = self.parseFile(os.path.join(path, fname))
 				dm = DataMatrix(a)
 				if self.dm == None:
@@ -296,7 +303,6 @@ class EyelinkAscFolderReader(BaseReader):
 				trialDict = self.parseTrial(trialId, fd)
 				if trialDict != None:
 					lTrialDict.append(trialDict)
-
 		# Extract the column names
 		lVar = []
 		for trialDict in lTrialDict:
@@ -304,7 +310,6 @@ class EyelinkAscFolderReader(BaseReader):
 				if var not in lVar:
 					lVar.append(var)
 		lVar.sort()
-
 		# Construct a numpy array with the variable names on the first row
 		a = np.zeros( (len(lTrialDict)+1, len(lVar)), dtype=self.dtype )
 		a[0] = np.array(lVar, dtype=self.dtype)
@@ -314,7 +319,6 @@ class EyelinkAscFolderReader(BaseReader):
 				if var in trialDict:
 					a[i, lVar.index(var)] = trialDict[var]
 			i += 1
-
 		return a
 
 	def parseLine(self, trialDict, l):
@@ -365,6 +369,7 @@ class EyelinkAscFolderReader(BaseReader):
 				trialDict['n_blink'] += 1
 			elif self.endBlink(l):
 				self.inBlink = False
+			self.parseStartTracePhase(l)
 			self.parseVariables(trialDict, l)
 			if self.offlineDriftCorr:
 				self.parseDriftCorr(l)
@@ -395,6 +400,19 @@ class EyelinkAscFolderReader(BaseReader):
 		if self.tracePhase not in self.traceDict:
 			self.traceDict[self.tracePhase] = []			
 		self.traceDict[self.tracePhase].append( (s['x'], s['y'], s['pupil']) )
+		
+	def parseStartTracePhase(self, l):
+
+		"""
+		Checks whether a new trace phase is started.
+		
+		Arguments:
+		l	--	A list.
+		"""
+		
+		# MSG	546748 phase baseline
+		if 'phase' in l and len(l) == 4:
+			self.tracePhase = l[3]
 
 	def parseVariables(self, trialDict, l):
 
