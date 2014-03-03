@@ -129,7 +129,11 @@ class BaseMatrix(object):
 		delimiter -- the character used to separate columns (default=',')
 		fmt -- the format to parse cells with (default='%s')
 		"""
-				
+
+		try:
+			os.makedirs(os.path.dirname(path))
+		except:
+			pass
 		if path.lower().endswith('.npy'):
 			np.save(path, self.asArray())
 		else:
