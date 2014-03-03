@@ -1,3 +1,5 @@
+#-*- coding:utf-8 -*-
+
 """
 This file is part of exparser.
 
@@ -15,24 +17,29 @@ You should have received a copy of the GNU General Public License
 along with exparser.  If not, see <http://www.gnu.org/licenses/>.
 """
 
+import os
 from scipy.stats import nanmean, nanmedian, nanstd, ttest_ind, linregress
 from scipy.interpolate import interp1d
 from matplotlib import pyplot as plt
 from matplotlib import mpl
+import warnings
 import numpy as np
 from exparser.TangoPalette import *
+from exparser.RBridge import RBridge
+from exparser.Cache import cachedArray
 
 def getTrace(dm, signal=None, phase=None, traceLen=None, offset=0, \
 	lock='start', traceTemplate='__trace_%s__', baseline=None, \
-	baselineLen=100, baselineOffset=0, baselineLock='end', smoothParams=None):
-		
+	baselineLen=100, baselineOffset=0, baselineLock='end', smoothParams=None, \
+	**dummy):
+
 	"""
 	Gets a trace for a single trial
-	
+
 	Arguments:
 	dm	--	a DataMatrix with only a single trial (if more trials are in there,
 			only the first will be used)
-	
+
 	Keyword arguments:
 	signal			--	'x', 'y', or 'pupil' (default=None)
 	phase			--	the name of the phase (default=None)
@@ -42,24 +49,27 @@ def getTrace(dm, signal=None, phase=None, traceLen=None, offset=0, \
 	lock			--	indicates whether the trace should be locked from the
 						phase start or end (default='start')
 	traceTemplate	--	is used to determine the correct key from the DataMatrix
-						based on the phase (default='__trace_%s__')		
+						based on the phase (default='__trace_%s__')
 	baseline		--	the phase to use for the baseline (default=None)
 	baselineLen		--	the length of the baseline (default=100)
 	baselineOffset	--	the first (if lock == start) or last (if lock == end)
 						baseline samples to skip (default=0)
 	baselineLock	--	indicates whether the baseline should be locked from the
-						phase start or end (default='start')
+						phase start or end (default='end')
 	smoothParams	--	a {'windowLen' : [..], 'windowType' : [..]} dictionary
 						that is used to specify signal smoothing (see smooth()),
 						or None for no smoothing. (default=None)
-	
+
 	Returns:
-	a 1D NumPy array with the trace	
+	a 1D NumPy array with the trace
 	"""
-	
+
 	if signal == None or phase == None or traceLen == None:
 		raise Exception('signal, phase, and traceLen are required keywords')
-		
+	if lock not in ['start', 'end']:
+		raise Exception('lock should be start or end')
+	if baselineLock not in ['start', 'end']:
+		raise Exception('baselineLock should be start or end')
 	if signal == 'x':
 		i = 0
 	elif signal == 'y':
@@ -69,6 +79,9 @@ def getTrace(dm, signal=None, phase=None, traceLen=None, offset=0, \
 	else:
 		raise Exception('Invalid signal!')
 	npy = dm[traceTemplate % phase][0]
+	if not os.path.exists(npy):
+		raise Exception('Missing .npy trace file: %s (path="%s")' \
+			% (traceTemplate % phase, npy))
 	aTrace = np.load(npy)[:,i]
 	if lock == 'start':
 		aTrace = aTrace[offset:offset+traceLen]
@@ -81,6 +94,9 @@ def getTrace(dm, signal=None, phase=None, traceLen=None, offset=0, \
 			aTrace = smooth(aTrace, **smoothParams)
 		return aTrace
 	npy = dm[traceTemplate % baseline][0]
+	if not os.path.exists(npy):
+		raise Exception('Missing .npy trace file: %s (path="%s")' \
+			% (traceTemplate % baseline, npy))
 	aBaseline = np.load(npy)[:,i]
 	if baselineLock == 'start':
 		aBaseline = aBaseline[baselineOffset:baselineOffset+baselineLen]
@@ -95,55 +111,55 @@ def getTrace(dm, signal=None, phase=None, traceLen=None, offset=0, \
 	return aTrace
 
 def getTraceAvg(dm, avgFunc=nanmean, **traceParams):
-	
+
 	"""
 	Gets a single average trace
-	
+
 	Arguments:
 	dm				--	a DataMatrix
-	
+
 	Keyword arguments:
 	avgFunc			--	the function to use to determine the average trace. This
 						function must be robust to nan values. (default=nanmean)
 	*traceParams	--	see getTrace()
-	
+
 	Returns:
 	An (xData, yData, errData) tuple, where errData contains the standard
 	error.
-	"""	
-	
+	"""
+
 	traceLen = traceParams['traceLen']
 	mTrace = np.empty( (len(dm), traceLen) )
 	mTrace[:] = np.nan
 	i = 0
 	for trialDm in dm:
-		aTrace = getTrace(trialDm, **traceParams)							
+		aTrace = getTrace(trialDm, **traceParams)
 		mTrace[i, 0:len(aTrace)] = aTrace
 		i += 1
 	xData = np.linspace(0, traceLen, traceLen)
 	yData = nanmean(mTrace, axis=0)
-	errData = nanstd(mTrace, axis=0) / np.sqrt(mTrace.shape[0])		
+	errData = nanstd(mTrace, axis=0) / np.sqrt(mTrace.shape[0])
 	errData = np.array( [errData, errData] )
 	return xData, yData, errData
 
 def plotTraceAvg(ax, dm, avgFunc=nanmean, lineColor=blue[0], errColor=gray[1], \
 	errAlpha=.4, label=None, _downSample=None, aErr=None, \
 	orientation='horizontal', **traceParams):
-		
+
 	"""
 	Plots a single average trace
-	
+
 	Arguments:
 	ax				--	a Matplotlib axis
 	dm				--	a DataMatrix
-	
+
 	Keyword arguments:
 	avgFunc			--	see getTraceAvg()
 	lineColor		--	the line color (default=blue[0])
 	errColor		--	the color for the error shading (default=gray[1])
-	errAlpha		--	the opacity for the error shading (default=.4)	
+	errAlpha		--	the opacity for the error shading (default=.4)
 	traceTemplate	--	is used to determine the correct key from the DataMatrix
-						based on the phase (default='__trace_%s__')						
+						based on the phase (default='__trace_%s__')
 	label			--	a line label (default=None)
 	_downSample		--	specify a decrease in resolution, to decrease the size
 						of the plot. (default=None)
@@ -155,7 +171,7 @@ def plotTraceAvg(ax, dm, avgFunc=nanmean, lineColor=blue[0], errColor=gray[1], \
 
 	xData, yData, errData = getTraceAvg(dm, avgFunc=avgFunc, **traceParams)
 	if aErr != None:
-		errData = aErr					
+		errData = aErr
 	if _downSample != None:
 		xData = downSample(xData, _downSample)
 		yData = downSample(yData, _downSample)
@@ -171,39 +187,105 @@ def plotTraceAvg(ax, dm, avgFunc=nanmean, lineColor=blue[0], errColor=gray[1], \
 			ax.fill_betweenx(xData, yData-errData[0], yData+errData[1], \
 				color=errColor, alpha=errAlpha)
 
-def mixedModelTrace(dm, fixedEffects, randomEffects, winSize=1, nSim=1000, \
-	effectIndex=0, **traceParams):
+def plotTraceContrast(dm, select1, select2, color1=blue[1], color2=orange[1], \
+	colorDiff=green[1], label1=None, label2=None, labelDiff=None, errAlpha= \
+	.25, model=None, showAbs=True, showDiff=False, **params):
+
+	"""
+	Creates a trace-contrast plot, with two lines and error shadings.
+
+	NOTE: Passing the `cacheId` keyword will cause the lmer statistics to be
+	cached.
+
+	Arguments:
+	dm				--	A DataMatrix.
+	select1			--	A select statement for the first trace.
+	select2			--	A select statement for the second trace.
+
+	Keyword arguments:
+	color1			--	A color for the first trace. (default=blue[1])
+	color2			--	A color for the second trace. (default=orange[1])
+	colorDiff		--	A color for the difference trace. (default=green[1])
+	label1			--	A label for the first trace. (default=None)
+	label2			--	A label for the second trace. (default=None)
+	labelDiff		--	A label for the difference trace. (default=None)
+	errAlpha		--	Alpha level for the error bars. (default=.25)
+	model			--	A statistical model to be passed onto
+						`mixedModelTrace()` or None to skip statistics.
+						(default=None)
+	showAbs			--	Indicates whether the absolute traces (i.e. traces 1 and
+						2) should be shown. (default=True)
+	showDiff		--	Indicates whether the absolute traces (i.e. trace 1
+						minus trace 2) should be shown. (default=False)
+	"""
+
+	dm1 = dm.select(select1)
+	dm2 = dm.select(select2)
+	x1, y1, err1 = getTraceAvg(dm.select(select1, verbose=False), **params)
+	x2, y2, err2 = getTraceAvg(dm.select(select2, verbose=False), **params)
+	y3 = y2-y1
+	if model != None:
+		aErr = mixedModelTrace(dm, model=model, **params)
+		d = y2-y1
+		aP = aErr[:,0]
+		aLo = aErr[:,1]
+		aHi = aErr[:,2]
+		minErr = (d-aLo)/2
+		maxErr = (aHi-d)/2
+		y1min = y1 - minErr
+		y1max = y1 + maxErr
+		y2min = y2 - minErr
+		y2max = y2 + maxErr
+		y3min = y3 - minErr
+		y3max = y3 + maxErr
+		if showAbs:
+			plt.fill_between(x1, y1min, y1max, color=color1, alpha=errAlpha)
+			plt.fill_between(x2, y2min, y2max, color=color2, alpha=errAlpha)
+		if showDiff:
+			plt.fill_between(x1, y3min, y3max, color=colorDiff, alpha=errAlpha)
+		markStats(plt.gca(), aP)
+	if showAbs:
+		plt.plot(x1, y1, color=color1, label=label1)
+		plt.plot(x2, y2, color=color2, label=label2)
+	elif showDiff:
+		plt.plot(x1, y3, color=colorDiff, label=labelDiff)
+
+@cachedArray
+def mixedModelTrace(dm, model, winSize=1, nSim=1000, effectIndex=1, \
+	**traceParams):
 
 	"""
 	Perform a mixed model over a single trace. The dependent variable is
 	specifed through the signal and phase keywords.
 
 	Arguments:
-	dm				--	a DataMatrix
-	fixedEffects	-- 	a list of fixed effects (i.e. the indendendent
-						variables)
-	randomEffects	--	a list of random effects, such as subject or item
-	
+	dm				--	A DataMatrix.
+	model			-- 	An lmer-style model.
+
 	Keyword arguments:
 	winSize			--	indicates the number of samples that should be skipped
 						each time. For a real analysis, this should be 1, but
 						for a quick look, it can be increased (default=1)
 	nSim			--	the number of similuations. This should be increased
 						for more accurate estimations (default=100)
-	effectIndex		--	The index of the effect that should be read from the
-						MixedEffectsMatrix. For example, if there are two
-						fixed effects, than 0 and 1 are the main effects, and
-						2 is the interaction. (default=0)
+	effectIndex		--	The row-index of the relevant effect in the lmer
+						output. (default=1)
 	*traceParams	--	see getTrace()
-	
+
 	Returns:
 	A (traceLen, 3) array, where the columns are
 	[p-value, 95low, 95high]
 	"""
 
-	from exparser.MixedEffectsMatrix import MixedEffectsMatrix
-	
-	traceLen = traceParams['traceLen']		
+	if not model.startswith('mmdv__ ~ '):
+		raise Exception( \
+			'The dependent variable for the model must be  `mmdv__`')
+	global R
+	try:
+		R
+	except:
+		R = RBridge()
+	traceLen = traceParams['traceLen']
 	aPVal = np.zeros( (traceLen, 3) )
 	for i in range(0, traceLen, winSize):
 		# First calculate the mean value for the current signal slice for each
@@ -212,68 +294,68 @@ def mixedModelTrace(dm, fixedEffects, randomEffects, winSize=1, nSim=1000, \
 		for trialId in range(len(_dm)):
 			aTrace = getTrace(_dm[trialId], **traceParams)
 			if i < len(aTrace):
-				sliceMean = aTrace[i:i+winSize].mean()				
+				sliceMean = aTrace[i:i+winSize].mean()
 			else:
 				sliceMean = np.nan
 			_dm['mmdv__'][trialId] = sliceMean
-
 		# Do mixed effects
-		mem = MixedEffectsMatrix(_dm, 'mmdv__', fixedEffects, \
-			randomEffects, nSim=nSim)
-		print mem
-		pVal = float(mem.asArray()[2+effectIndex][6])
-		ciLow = float(mem.asArray()[2+effectIndex][3])
-		ciHigh = float(mem.asArray()[2+effectIndex][4])
-		aPVal[i:i+winSize,0] = pVal
-		aPVal[i:i+winSize,1] = ciLow
-		aPVal[i:i+winSize,2] = ciHigh
+		R.load(_dm)
+		_dm = R.lmer(model, nsim=nSim)
+		print _dm
+		pVal = _dm['p'][effectIndex]
+		ciHigh = _dm['ci95up'][effectIndex]
+		ciLow = _dm['ci95lo'][effectIndex]
+		aPVal[i:i+winSize, 0] = pVal
+		aPVal[i:i+winSize, 1] = ciHigh
+		aPVal[i:i+winSize, 2] = ciLow
 		print '%.4d: p = %.3f (%f - %f)' % (i, pVal, ciHigh, ciLow)
-		
+		print
 	return aPVal
 
 def markStats(ax, aPVal, alpha=.05, minSmp=200, color=gray[1]):
-	
+
 	"""
 	Marks all timepoints in a figure with colored shading when the significance
 	falls below an alpha threshold.
-	
+
 	Arguments:
-	ax		--	a matplitlin axis	
+	ax		--	a matplotlib axis
 	aPVal	--	an array with p-values
-	
+
 	Keyword arguments:
 	alpha	--	the alpha threshold (default=.01)
 	minSmp	--	the minimum number of consecutive significant samples
 				(default=10)
 	color	--	the color for the shading (default=gray[1])
 	"""
-	
+
 	iFrom = None
 	for i in range(len(aPVal)):
-		pVal = aPVal[i]		
-		if pVal < alpha:			
+		pVal = aPVal[i]
+		if pVal < alpha:
 			if iFrom == None:
-				iFrom = i				
-		if (pVal > alpha or i == len(aPVal)-1) and iFrom != None:
+				iFrom = i
+		if ((pVal > alpha or (i == len(aPVal)-1)) and iFrom != None):
 			if i-iFrom >= minSmp-1:
+				print 'Significant region: %d - %d' % (iFrom, i-1)
 				ax.axvspan(iFrom, i-1, ymax=1, color=color, zorder=-9999)
 			iFrom = None
-						
+
 def smooth(aTrace, windowLen=11, windowType='hanning', correctLen=True):
 
 	"""
-	Source: <http://www.scipy.org/Cookbook/SignalSmooth>	
-	
+	Source: <http://www.scipy.org/Cookbook/SignalSmooth>
+
 	Smooth the data using a window with requested size.
 
 	This method is based on the convolution of a scaled window with the signal.
-	The signal is prepared by introducing reflected copies of the signal 
+	The signal is prepared by introducing reflected copies of the signal
 	(with the window size) in both ends so that transient parts are minimized
 	in the begining and end part of the output signal.
 
 	Arguments:
-	aTrace		--	an array with the input signal 
-	
+	aTrace		--	an array with the input signal
+
 	Keyword arguments:
 	windowLen	--	the dimension of the smoothing window; should be an odd
 					integer (default=5)
@@ -313,18 +395,18 @@ def smooth(aTrace, windowLen=11, windowType='hanning', correctLen=True):
 	return y
 
 def downSample(aTrace, i):
-	
+
 	"""
 	Downsamples an array by skipping samples.
-	
+
 	Arguments:
 	aTrace		--	input array
 	i			--	downsampling ratio
-	
+
 	Returns:
-	A downsampled array	
+	A downsampled array
 	"""
-	
+
 	if len(aTrace.shape) == 1:
 		return aTrace[::i]
 	elif len(aTrace.shape) == 2:
@@ -334,44 +416,44 @@ def downSample(aTrace, i):
 		return np.array(l)
 	else:
 		raise Exception('Only 1 and 2-dimensional arrays are allowed')
-	
+
 def latency(aTrace, at=None, vt=None, plot=False):
-	
+
 	"""
 	Determines the response latency in a signal, based on an accelation and/ or
 	velocity threshold.
-	
+
 	Arguments:
 	aTrace		--	input array
-	
+
 	Keyword arguments:
 	at			--	acceleration threshold (default=None)
 	vt	 		--	velocity threshold (default=None)
 	plot		--	indicates whether a plot should be shown (default=False)
-	
+
 	Returns:
 	The first sample where the acceleration or velocity threshold is exceeded
 	"""
-	
+
 	if at == None and vt == None:
 		raise Exception( \
 			'You must specify an accelation and/or velocity threshold')
-			
+
 	velTrace = aTrace[1:] - aTrace[:-1]
 	accTrace = velTrace[1:] - velTrace[:-1]
 	aLat = None
 	vLat = None
-	
+
 	if vt != None:
 		l = np.where(np.abs(velTrace) > vt)[0]
 		if len(l) > 0:
 			vLat = l[0]
-			
+
 	if at != None:
 		l = np.where(np.abs(accTrace) > at)[0]
 		if len(l) > 0:
-			aLat = l[0]			
-			
+			aLat = l[0]
+
 	if aLat == None and vLat == None:
 		lat = None
 	elif aLat == None:
@@ -380,28 +462,28 @@ def latency(aTrace, at=None, vt=None, plot=False):
 		lat = aLat
 	else:
 		lat = min(aLat, vLat)
-	
+
 	if plot:
 		plt.subplot(311)
-		plt.plot(aTrace)		
+		plt.plot(aTrace)
 		if lat != None:
-			plt.axvline(lat)		
+			plt.axvline(lat)
 		plt.subplot(312)
 		plt.plot(velTrace)
 		if vt != None:
 			plt.axhline(vt, color='red')
 		if lat != None:
-			plt.axvline(lat)		
+			plt.axvline(lat)
 		plt.axhline()
 		plt.subplot(313)
 		plt.plot(accTrace)
 		if at != None:
-			plt.axhline(at, color='red')		
+			plt.axhline(at, color='red')
 		if lat != None:
-			plt.axvline(lat)		
+			plt.axvline(lat)
 		plt.axhline()
-		plt.show()		
-	
+		plt.show()
+
 	return lat
 
 def blinkReconstruct(aTrace, vt=5, maxDur=500, margin=10, plot=False):
@@ -428,7 +510,12 @@ def blinkReconstruct(aTrace, vt=5, maxDur=500, margin=10, plot=False):
 	# Create a copy of the signal, a smoothed version, and calculate the
 	# velocity profile.
 	aTrace = np.copy(aTrace)
-	sTrace = smooth(aTrace, windowLen=21)
+	try:
+		sTrace = smooth(aTrace, windowLen=21)
+	except Exception as e:
+		warnings.warn(str(e))
+		sTrace = aTrace
+
 	vTrace = sTrace[1:]-sTrace[:-1]
 
 	if plot:

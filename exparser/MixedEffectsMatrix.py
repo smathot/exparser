@@ -22,6 +22,10 @@ import types
 import numpy as np
 from exparser.BaseMatrix import BaseMatrix
 from exparser import Constants
+import warnings
+
+warnings.warn( \
+	'`MixedEffectsMatrix` is broken. Please use the `RBridge.lmer()`')
 
 class MixedEffectsMatrix(BaseMatrix):
 
@@ -36,9 +40,8 @@ class MixedEffectsMatrix(BaseMatrix):
 
 		Arguments:
 		dm 				--	a DataMatrix
-		factors			--	a list of factors
 		dv				--	the dependent variable
-		fixedEffects		-- 	a list of fixed effects (i.e. the indendendent
+		fixedEffects	-- 	a list of fixed effects (i.e. the indendendent
 							variables)
 		randomEffects	--	a list of random effects, such as subject or item
 
@@ -62,7 +65,7 @@ class MixedEffectsMatrix(BaseMatrix):
 		lme4 = importr('lme4')
 		utils = importr('utils')
 		langR = importr('languageR')
-		
+
 		if type(dv) == types.FunctionType:
 			sdv = dv.__name__
 		else:
@@ -74,7 +77,7 @@ class MixedEffectsMatrix(BaseMatrix):
 		# 'dv ~ fixed1 * fixed 2 + (1|random1) + (1|random2)'
 		# Random slopes example:
 		# 'dv ~ fixed1 * fixed 2 + (1+fixed1|subject) + (1+random2)'
-		
+
 		if formula == None:
 			fixedEffectsTemplate = fixedOp.join(fixedEffects)
 			randomEffectsTemplate = '+'.join(['(1|%s)' % re for re in \
@@ -83,6 +86,7 @@ class MixedEffectsMatrix(BaseMatrix):
 				randomEffectsTemplate)
 		else:
 			self._formula = formula
+		print self._formula
 
 		# Register all the variables so that R can use them
 		for f in fixedEffects + randomEffects:
@@ -94,15 +98,14 @@ class MixedEffectsMatrix(BaseMatrix):
 
 		# Perform the regression
 		self.model = lme4.lmer(robjects.Formula(self._formula), verbose=False)
-		
+
 		# Get the start of the model output that has t-values and standard
 		# errors
 		lModel = str(self.model).split('\n')
 		for i in range(len(lModel)):
 			if lModel[i] == 'Fixed effects:':
 				break
-		i += 2				
-		#print self.model, self._formula
+		i += 2
 		self.pVals = langR.pvals_fnc(self.model, nsim=nSim, ndigits=10)
 
 		## Convert the results into a Matrix for easy reading

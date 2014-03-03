@@ -557,10 +557,8 @@ class DataMatrix(BaseMatrix):
 		"""
 
 		i = np.where(~np.isnan(self.m[key]))[0]
-		print i
-		print 'Removing %d rows' % len(i)
+		print 'Removing %d rows with nans' % len(i)
 		dm = DataMatrix(self.m[i], structured=True)
-		print dm.m.dtype
 		return dm
 
 	def removeField(self, vName):
