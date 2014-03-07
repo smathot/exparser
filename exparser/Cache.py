@@ -51,6 +51,9 @@ def cachedArray(func):
 			cachePath = None
 		if skipCache or cachePath == None or not os.path.exists(cachePath):
 			a = func(*args, **kwargs)
+			if not isinstance(a, np.array):
+				raise Exception( \
+					'You can use the @cachedArray decorator only for functions that return a NumPy array.')
 			if cachePath != None:
 				print '@cachedArray: saving %s' % cachePath
 				np.save(cachePath, a)
@@ -81,6 +84,9 @@ def cachedDataMatrix(func):
 			cachePath = None
 		if skipCache or cachePath == None or not os.path.exists(cachePath):
 			dm = func(*args, **kwargs)
+			if not isinstance(dm, DataMatrix):
+				raise Exception( \
+					'You can use the @cachedDataMatrix decorator only for functions that return a DataMatrix.')
 			if cachePath != None:
 				print '@cachedDataMatrix: saving %s' % cachePath
 				dm.save(cachePath)
