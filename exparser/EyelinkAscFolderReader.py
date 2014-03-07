@@ -55,7 +55,7 @@ class EyelinkAscFolderReader(BaseReader):
 							as 3d numpy arrays (x, y, pupil size) in .npy
 							format. To start collecting traces, set
 							`self.tracePhase` to a value. Use the value
-							'__baseline__' to use an automatic baseline.							
+							'__baseline__' to use an automatic baseline.
 							(default='traces')
 		offlineDriftCorr	--	Indicates whether coordinates should be
 								corrected based on the drift-correction check,
@@ -187,7 +187,7 @@ class EyelinkAscFolderReader(BaseReader):
 		"""
 
 		pass
-	
+
 	def __finishTrial__(self, trialDict):
 
 		"""
@@ -216,7 +216,7 @@ class EyelinkAscFolderReader(BaseReader):
 			self.traceDict[phase] = a
 			path = os.path.join(self.traceFolder, '%s-%.5d-%s.npy' \
 				% (trialDict['file'], trialDict['trialId'], phase))
-			np.save(path, a)		
+			np.save(path, a)
 			trialDict['__trace_%s__' % phase] = path
 			if '--traceplot' in sys.argv or '--traceimg' in sys.argv:
 				plt.subplot(nPhase, 3, i)
@@ -234,7 +234,7 @@ class EyelinkAscFolderReader(BaseReader):
 				plt.subplot(nPhase, 3, i)
 				i += 1
 				plt.title('Pupil(%s)' % phase)
-				plt.plot(a[:,2])	
+				plt.plot(a[:,2])
 				if self.traceSmoothParams != None or self.blinkReconstruct:
 					plt.plot(origA[:,2])
 		if '--traceplot' in sys.argv or '--traceimg' in sys.argv:
@@ -257,25 +257,25 @@ class EyelinkAscFolderReader(BaseReader):
 
 		self.tracePhase = None
 		self.traceDict = {}
-		
+
 	def parseDriftCorr(self, l):
-		
+
 		"""
 		Sets the drift-correction parameters based on the drift correction data.
 		This allows you to do real drift correct offline, even when this was not
 		enabled during the experiment.
-		
+
 		MSG	900353 DRIFTCORRECT R RIGHT at 512,384  OFFSET 0.45 deg.  -15.5,5.3 pix.
-		
+
 		Arguments:
-		l	--	a list		
+		l	--	a list
 		"""
-				
-		if 'DRIFTCORRECT' in l and len(l) > 10:			
+
+		if 'DRIFTCORRECT' in l and len(l) > 10:
 			s = l[10].split(',')
 			x = float(s[0])
-			y = float(s[1])			
-			self.driftAdjust = x, y			
+			y = float(s[1])
+			self.driftAdjust = x, y
 
 	def parseFile(self, path):
 
@@ -295,7 +295,7 @@ class EyelinkAscFolderReader(BaseReader):
 				break
 			l = self.strToList(s)
 			if self.offlineDriftCorr:
-				self.parseDriftCorr(l)			
+				self.parseDriftCorr(l)
 			trialId = self.startTrial(l)
 			if self.maxTrialId != None and trialId > self.maxTrialId:
 				break
@@ -384,32 +384,32 @@ class EyelinkAscFolderReader(BaseReader):
 			warnings.warn('Trial %s was started but not ended' \
 				% trialDict['trialId'])
 			return None
-			
+
 	def parseTrace(self, l):
-		
+
 		"""
 		Adds a gaze sample to a trace
 
 		Arguments:
 		l -- a list
 		"""
-		
+
 		s = self.toSample(l)
 		if s == None:
 			return
 		if self.tracePhase not in self.traceDict:
-			self.traceDict[self.tracePhase] = []			
+			self.traceDict[self.tracePhase] = []
 		self.traceDict[self.tracePhase].append( (s['x'], s['y'], s['pupil']) )
-		
+
 	def parseStartTracePhase(self, l):
 
 		"""
 		Checks whether a new trace phase is started.
-		
+
 		Arguments:
 		l	--	A list.
 		"""
-		
+
 		# MSG	546748 phase baseline
 		if 'phase' in l and len(l) == 4:
 			self.tracePhase = l[3]
@@ -513,7 +513,7 @@ class EyelinkAscFolderReader(BaseReader):
 		"""
 		Attempts to parse a line (in list format) into a dictionary of sample
 		information. The expected format is:
-		
+
 		# Timestamp x y pupil size ...
 		4815155   168.2   406.5  2141.0 ...
 
@@ -574,5 +574,5 @@ class EyelinkAscFolderReader(BaseReader):
 		fixation["y"] = l[6] - self.driftAdjust[1]
 		fixation["sTime"] = l[2]
 		fixation["eTime"] = l[3]
-		fixation["duration"] = fixation['sTime'] - fixation['eTime']
+		fixation["duration"] = fixation['eTime'] - fixation['sTime']
 		return fixation
