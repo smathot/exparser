@@ -26,7 +26,7 @@ import warnings
 import numpy as np
 from exparser.TangoPalette import *
 from exparser.RBridge import RBridge
-from exparser.Cache import cachedArray
+from exparser.Cache import cachedArray, cachedDataMatrix
 
 def getTrace(dm, signal=None, phase=None, traceLen=None, offset=0, \
 	lock='start', traceTemplate='__trace_%s__', baseline=None, \
@@ -64,6 +64,8 @@ def getTrace(dm, signal=None, phase=None, traceLen=None, offset=0, \
 	a 1D NumPy array with the trace
 	"""
 
+	if len(dm) != 1:
+		raise Exception('DataMatrix must have exactly one row')
 	if signal == None or phase == None or traceLen == None:
 		raise Exception('signal, phase, and traceLen are required keywords')
 	if lock not in ['start', 'end']:
@@ -78,21 +80,34 @@ def getTrace(dm, signal=None, phase=None, traceLen=None, offset=0, \
 		i = 2
 	else:
 		raise Exception('Invalid signal!')
+	# Get the trace
 	npy = dm[traceTemplate % phase][0]
 	if not os.path.exists(npy):
 		raise Exception('Missing .npy trace file: %s (path="%s")' \
 			% (traceTemplate % phase, npy))
-	aTrace = np.load(npy)[:,i]
+	_aTrace = np.load(npy)[:,i]
 	if lock == 'start':
-		aTrace = aTrace[offset:offset+traceLen]
+		_aTrace = _aTrace[offset:offset+traceLen]
 	elif offset > 0:
-		aTrace = aTrace[-offset-traceLen:-offset]
+		_aTrace = _aTrace[-offset-traceLen:-offset]
 	else:
-		aTrace = aTrace[-traceLen:]
+		_aTrace = _aTrace[-traceLen:]
+	# Paste the trace into a nan-filled trace that has exactly the desired
+	# length. This is necessary to deal with traces that are shorter than the
+	# specified traceLen.
+	aTrace = np.empty(traceLen)
+	aTrace[:] = np.nan
+	if lock == 'start':
+		aTrace[:len(_aTrace)] = _aTrace
+	else:
+		aTrace[-len(_aTrace):] = _aTrace
+	# If we don't apply a baseline then return right away, possible after
+	# smoothing
 	if baseline == None:
 		if smoothParams != None:
 			aTrace = smooth(aTrace, **smoothParams)
 		return aTrace
+	# Get the baseline
 	npy = dm[traceTemplate % baseline][0]
 	if not os.path.exists(npy):
 		raise Exception('Missing .npy trace file: %s (path="%s")' \
@@ -250,6 +265,41 @@ def plotTraceContrast(dm, select1, select2, color1=blue[1], color2=orange[1], \
 	elif showDiff:
 		plt.plot(x1, y3, color=colorDiff, label=labelDiff)
 
+def traceDiff(dm, select1, select2, epoch=None, **traceParams):
+
+	"""
+	Deteremines the difference in the trace between two subsets of the data
+	(i.e. two groups or conditions) within a particular epoch.
+
+	Arguments:
+	dm				--	A DataMatrix.
+	select1			--	A select statement for the first trace.
+	select2			--	A select statement for the second trace.
+
+	Keyword arguments:
+	epoch			--	The time interval for which to estimate the trace
+						difference. This can be None to use the entire trace,
+						a single int to take one sample, or a (start, end) tuple
+						to select a particular epoch. (default=None)
+	traceParams		--	The trace parameters. (default=trialParams)
+
+	Returns:
+	A single value reflecting the trace difference.
+	"""
+
+	x1, y1, err1 = getTraceAvg(dm.select(select1, verbose=False), \
+		**traceParams)
+	x2, y2, err2 = getTraceAvg(dm.select(select2, verbose=False), \
+		**traceParams)
+	d = y1-y2
+	if type(epoch) == int:
+		return d[epoch]
+	if type(epoch) == tuple and len(epoch) == 2:
+		d = d[epoch[0]:epoch[1]]
+	elif epoch != None:
+		raise Exception('Epoch should be None, int, or (int, int)')
+	return d.mean()
+
 @cachedArray
 def mixedModelTrace(dm, model, winSize=1, nSim=1000, effectIndex=1, \
 	**traceParams):
@@ -260,7 +310,9 @@ def mixedModelTrace(dm, model, winSize=1, nSim=1000, effectIndex=1, \
 
 	Arguments:
 	dm				--	A DataMatrix.
-	model			-- 	An lmer-style model.
+	model			-- 	An lmer-style model. This needs to be only the fixed and
+						random effects part of the model, so everything after
+						the `~` sign. For example `cond + (1|subject_nr)`.
 
 	Keyword arguments:
 	winSize			--	indicates the number of samples that should be skipped
@@ -273,13 +325,11 @@ def mixedModelTrace(dm, model, winSize=1, nSim=1000, effectIndex=1, \
 	*traceParams	--	see getTrace()
 
 	Returns:
-	A (traceLen, 3) array, where the columns are
-	[p-value, 95low, 95high]
+	A (traceLen, 3) array, where the columns are [p-value, 95low, 95high].
 	"""
 
 	if not model.startswith('mmdv__ ~ '):
-		raise Exception( \
-			'The dependent variable for the model must be  `mmdv__`')
+		model = 'mmdv__ ~ ' + model
 	global R
 	try:
 		R
@@ -619,3 +669,54 @@ def blinkReconstruct(aTrace, vt=5, maxDur=500, margin=10, plot=False):
 	if plot:
 		return aTrace, fig
 	return aTrace
+
+@cachedDataMatrix
+def splitTrace(dm, splitCol, phase, phaseBefore=None, phaseAfter=None, \
+	traceTemplate='__trace_%s__'):
+
+	"""
+	Splits all traces in the DataMatrix by the value in a specific column. This
+	allows, for example, to split a single trace at the point at which a
+	response was given.
+
+	NOTE: This function is cached.
+
+	Arguments:
+	splitCol	--	The column that contains the values to split by.
+	phase		--	The name of the phase to split.
+
+	Keyword arguments:
+	phaseBefore	--	The name of the phase that will be the first part of the
+					split. None means that this part of the split will not be
+					kept. (default=None)
+	phaseAfter	--	The name of the phase that will be the second part of the
+					split. None means that this part of the split will not be
+					kept. (default=None)
+	traceTemplate	--	See `getTrace()`.
+	**traceParams	--	See `getTrace()`.
+
+	Returns:
+	The DataMatrix with the splitted phased added.
+	"""
+
+	if phaseBefore == None and phaseAfter == None:
+		raise Exception('Either phaseBefore or phaseAfter should be specified')
+	if phaseBefore != None:
+		dm = dm.addField(traceTemplate % phaseBefore, dtype=str)
+	if phaseAfter != None:
+		dm = dm.addField(traceTemplate % phaseAfter, dtype=str)
+	for i in dm.range():
+		npy =  dm[traceTemplate % phase][i]
+		a = np.load(npy)
+		split = dm[splitCol][i]
+		aBefore = a[:split]
+		aAfter = a[split:]
+		if phaseBefore != None:
+			npyBefore = npy + '.before.npy'
+			np.save(npyBefore, aBefore)
+			dm[traceTemplate % phaseBefore][i] = npyBefore
+		if phaseAfter != None:
+			npyAfter = npy + '.after.npy'
+			np.save(npyAfter, aAfter)
+			dm[traceTemplate % phaseAfter][i] = npyAfter
+	return dm
