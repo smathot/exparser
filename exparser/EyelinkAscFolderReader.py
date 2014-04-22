@@ -216,6 +216,9 @@ class EyelinkAscFolderReader(BaseReader):
 			self.traceDict[phase] = a
 			path = os.path.join(self.traceFolder, '%s-%.5d-%s.npy' \
 				% (trialDict['file'], trialDict['trialId'], phase))
+			if not os.path.exists(self.traceFolder):
+				print('Creating traceFolder: %s' % self.traceFolder)
+				os.makedirs(self.traceFolder)
 			np.save(path, a)
 			trialDict['__trace_%s__' % phase] = path
 			if '--traceplot' in sys.argv or '--traceimg' in sys.argv:
@@ -242,6 +245,10 @@ class EyelinkAscFolderReader(BaseReader):
 			if '--traceimg' in sys.argv:
 				path = os.path.join(self.traceFolder, 'png', '%s-%.5d-%s.png' \
 					% (trialDict['file'], trialDict['trialId'], phase))
+				if not os.path.exists(os.path.join(self.traceFolder, 'png')):
+					print('Creating traceImgFolder: %s' % os.path.join( \
+						self.traceFolder, 'png'))
+				os.makedirs(self.traceFolder)
 				plt.savefig(path)
 			if '--traceplot' in sys.argv:
 				plt.show()
