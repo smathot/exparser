@@ -763,8 +763,6 @@ class DataMatrix(BaseMatrix):
 
 		"""Shuffles the datamatrix in place"""
 
-		#np.random.shuffle(self.m)
-
 		# Directly shuffling the array does not preserve all items! This seems
 		# to be a bug in numpy. This workaround preserves the integrity of the
 		# DataMatrix.
