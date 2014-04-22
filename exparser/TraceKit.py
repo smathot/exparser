@@ -301,7 +301,7 @@ def traceDiff(dm, select1, select2, epoch=None, **traceParams):
 	return d.mean()
 
 @cachedArray
-def mixedModelTrace(dm, model, winSize=1, nSim=1000, effectIndex=1, \
+def mixedModelTrace(dm, model, winSize=1, pvals=True, nSim=1000, effectIndex=1, \
 	**traceParams):
 
 	"""
@@ -318,6 +318,8 @@ def mixedModelTrace(dm, model, winSize=1, nSim=1000, effectIndex=1, \
 	winSize			--	indicates the number of samples that should be skipped
 						each time. For a real analysis, this should be 1, but
 						for a quick look, it can be increased (default=1)
+	pvals			--	Indicates whether pvals.fnc() should be used to
+						estimate p-values. (default=True)
 	nSim			--	the number of similuations. This should be increased
 						for more accurate estimations (default=100)
 	effectIndex		--	The row-index of the relevant effect in the lmer
@@ -350,7 +352,7 @@ def mixedModelTrace(dm, model, winSize=1, nSim=1000, effectIndex=1, \
 			_dm['mmdv__'][trialId] = sliceMean
 		# Do mixed effects
 		R.load(_dm)
-		_dm = R.lmer(model, nsim=nSim)
+		_dm = R.lmer(model, pvals=pvals, nsim=nSim)
 		print _dm
 		pVal = _dm['p'][effectIndex]
 		ciHigh = _dm['ci95up'][effectIndex]
