@@ -51,7 +51,7 @@ def cachedArray(func):
 			cachePath = None
 		if skipCache or cachePath == None or not os.path.exists(cachePath):
 			a = func(*args, **kwargs)
-			if not isinstance(a, np.array):
+			if not isinstance(a, np.ndarray):
 				raise Exception( \
 					'You can use the @cachedArray decorator only for functions that return a NumPy array.')
 			if cachePath != None:
