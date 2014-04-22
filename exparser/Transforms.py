@@ -59,6 +59,21 @@ def dPrime(dm):
 	FAR = np.mean(1-noChangeDm['correct'])
 	return norm.ppf(HR) - norm.ppf(FAR)
 
+def invMean(dm, key='response_time'):
+
+	"""
+	Calculates the inverse of the mean of the inverse of the values of a given
+	column. This is useful as a way to get a mean that is robust to outliers.
+
+	Arguments:
+	dm		--	A DataMatrix.
+
+	Keyword arguments:
+	key		--	The variable to use. (default='response_time')
+	"""
+
+	return 1./np.mean(1./dm[key])
+
 def rtAdjust(dm, rtVar='response_time', correctVar='correct'):
 
 	"""
