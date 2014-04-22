@@ -24,6 +24,7 @@ import select
 import signal
 from exparser.CsvReader import CsvReader
 from exparser.DataMatrix import DataMatrix
+from exparser.Cache import cachedDataMatrix
 
 class RBridge(object):
 
@@ -44,6 +45,7 @@ class RBridge(object):
 
 		self.close()
 
+	@cachedDataMatrix
 	def aov(self, formula, aovVar='aov1'):
 
 		"""
@@ -83,6 +85,7 @@ class RBridge(object):
 		dm = DataMatrix(l)
 		return dm
 
+	@cachedDataMatrix
 	def anova(self, model1, model2, anovaVar='aov1'):
 
 		"""
@@ -141,12 +144,14 @@ class RBridge(object):
 		self.write('quit()')
 		self.RProcess.wait()
 
+	@cachedDataMatrix
 	def lmer(self, formula, lmerVar='lmer1', pvalsVar='pv1', nsim=1000, \
 		full=False, pvals=True):
 
 		"""
 		Performs a linear mixed-effects model, using the `lmer()` function from
-		`lme4`. P-values are calculated to using `pvals.fnc()` from `languageR`.
+		`lme4`. P-values are either calculated using `pvals.fnc()` from
+		`languageR` or using `getSummary()` from `memisc()`.
 
 		Notes for Ubuntu 13.10:
 
@@ -200,8 +205,8 @@ class RBridge(object):
 		# If we don't want to use the pvals estimation, this is all we use.
 		if not pvals:
 			if not full:
-				dm = dm.selectColumns(['f0', 'stat', 'est', 'se', 'stat', 'p', \
-					'lwr', 'upr'])
+				dm = dm.selectColumns(['f0', 'stat', 'est', 'se', 'p', 'lwr', \
+					'upr'])
 				dm.rename('f0', 'effect')
 				dm.rename('lwr', 'ci95lo')
 				dm.rename('upr', 'ci95up')
@@ -209,10 +214,10 @@ class RBridge(object):
 			return dm
 		# If we do want to use the pvals estimation, we need to extract the
 		# column with t-values, so that we can add it to the pvals output, which
-		# doesn't contain this information. The last two rows are dummy rows, so
-		# we strip them.
+		# doesn't contain this information.
 		os.remove('.rbridge-lmer.csv')
-		tvals = dm['stat'][:-2]
+		tvals = dm['stat']
+		se = dm['se']
 		self.write('library(languageR)')
 		self.write( \
 			'%s <- pvals.fnc(%s, nsim=%d, ndigits=20)' % \
@@ -237,7 +242,10 @@ class RBridge(object):
 			dm.rename('HPD95upper', 'ci95up')
 			dm.rename('Pr(>|t|)', 'p')
 			dm = dm.addField('t', dtype=float)
-			dm['t'] = tvals
+			dm = dm.addField('se', dtype=float)
+			# Add the t-values, and strip the last rows, which are unused.
+			dm['t'] = tvals[:len(dm)]
+			dm['se'] = se[:len(dm)]
 		return dm
 
 	def load(self, dm, frame='data'):
