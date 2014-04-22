@@ -338,7 +338,7 @@ def mixedModelTrace(dm, model, winSize=1, pvals=True, nSim=1000, effectIndex=1, 
 	except:
 		R = RBridge()
 	traceLen = traceParams['traceLen']
-	aPVal = np.zeros( (traceLen, 3) )
+	aTVal = np.zeros( (traceLen, 3) )
 	for i in range(0, traceLen, winSize):
 		# First calculate the mean value for the current signal slice for each
 		# trial and save that in a copy of the DataMatrix
@@ -352,19 +352,19 @@ def mixedModelTrace(dm, model, winSize=1, pvals=True, nSim=1000, effectIndex=1, 
 			_dm['mmdv__'][trialId] = sliceMean
 		# Do mixed effects
 		R.load(_dm)
-		_dm = R.lmer(model, pvals=pvals, nsim=nSim)
+		_dm = R.lmer(model)
 		print _dm
-		pVal = _dm['p'][effectIndex]
-		ciHigh = _dm['ci95up'][effectIndex]
-		ciLow = _dm['ci95lo'][effectIndex]
-		aPVal[i:i+winSize, 0] = pVal
-		aPVal[i:i+winSize, 1] = ciHigh
-		aPVal[i:i+winSize, 2] = ciLow
-		print '%.4d: p = %.3f (%f - %f)' % (i, pVal, ciHigh, ciLow)
+		tVal = _dm['t'][effectIndex]
+		errHigh = _dm['est'][effectIndex] + _dm['se'][effectIndex]
+		errLow = _dm['est'][effectIndex] - _dm['se'][effectIndex]
+		aTVal[i:i+winSize, 0] = tVal
+		aTVal[i:i+winSize, 1] = errHigh
+		aTVal[i:i+winSize, 2] = errLow
+		print '%.4d: t = %.3f (%f - %f)' % (i, tVal, errHigh, errLow)
 		print
-	return aPVal
+	return aTVal
 
-def markStats(ax, aPVal, alpha=.05, minSmp=200, color=gray[1]):
+def markStats(ax, aStat, below=True, thr=.05, minSmp=200, color=gray[1]):
 
 	"""
 	Marks all timepoints in a figure with colored shading when the significance
@@ -372,22 +372,25 @@ def markStats(ax, aPVal, alpha=.05, minSmp=200, color=gray[1]):
 
 	Arguments:
 	ax		--	a matplotlib axis
-	aPVal	--	an array with p-values
+	aStat	--	an array with statistics, such as p-values or t-values.
 
 	Keyword arguments:
-	alpha	--	the alpha threshold (default=.01)
-	minSmp	--	the minimum number of consecutive significant samples
-				(default=10)
-	color	--	the color for the shading (default=gray[1])
+	below		--	Indicates whether values blow the threshold (True) or above
+					it (False) are considered to be signficant. (default=True)
+	thr 		--	the threshold (default=.01)
+	minSmp		--	the minimum number of consecutive significant samples
+					(default=10)
+	color		--	the color for the shading (default=gray[1])
 	"""
 
 	iFrom = None
-	for i in range(len(aPVal)):
-		pVal = aPVal[i]
-		if pVal < alpha:
+	for i in range(len(aStat)):
+		pVal = aStat[i]
+		hit = (pVal < thr and below) or (pVal > thr and not below)
+		if hit:
 			if iFrom == None:
 				iFrom = i
-		if ((pVal > alpha or (i == len(aPVal)-1)) and iFrom != None):
+		if ((not hit or (i == len(aStat)-1)) and iFrom != None):
 			if i-iFrom >= minSmp-1:
 				print 'Significant region: %d - %d' % (iFrom, i-1)
 				ax.axvspan(iFrom, i-1, ymax=1, color=color, zorder=-9999)

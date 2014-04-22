@@ -145,20 +145,14 @@ class RBridge(object):
 		self.RProcess.wait()
 
 	@cachedDataMatrix
-	def lmer(self, formula, lmerVar='lmer1', pvalsVar='pv1', nsim=1000, \
-		full=False, pvals=True):
+	def lmer(self, formula, lmerVar='lmer1', pvalsVar='pv1'):
 
 		"""
 		Performs a linear mixed-effects model, using the `lmer()` function from
-		`lme4`. P-values are either calculated using `pvals.fnc()` from
-		`languageR` or using `getSummary()` from `memisc()`.
-
-		Notes for Ubuntu 13.10:
-
-		- Make sure that you use the official R packages from the Ubuntu
-		  repository, and not the (newer) packages from the unofficial R PPA.
-		- Download languageR 1.4 from the website and install it manually. This
-		  is necessary, because the package will fail to install through CRAN.
+		`lme4`. Since support for MCMC sampling has been dropped from lme4, this
+		function no longer returns p-values. It is recommended to use the
+		standard error, and the t > 2 threshold for significance, as suggested
+		by Baayen et al. (2008 J Mem Lang).
 
 		Arguments:
 		formula		--	An R-style mixed-effects formula.
@@ -168,14 +162,7 @@ class RBridge(object):
 						(default='lmer1')
 		pvalsVar	--	The R variable to store the `pvals.fnc()` output in.
 						(default='pv1')
-		full		--	Indicates whether the full model output should be
-						returned, or only a subset with renamed variable names.
-						(default=False)
-		pvals		--	Indicates whether the lmer should be fed into
-						`pvals.fnc()` to estimate p-values and confidence
-						intervals. If not, the results are summarized using
-						`getSummary.mer()` from the `memisc` package.
-						(default=True)
+
 		Returns:
 		A DataMatrix with the model output.
 		"""
@@ -186,11 +173,7 @@ class RBridge(object):
 		# Peform lmer
 		self.write('library(lme4)')
 		s = self.call('(%s <- lmer(%s))' % (lmerVar, formula))
-
-		# Summarize the data using `memisc`
-		self.write('library(memisc)')
-		self.write( \
-			'write.csv(getSummary.mer(%s)$coef, ".rbridge-lmer.csv")' % \
+		self.write('write.csv(summary(%s)$coef, ".rbridge-lmer.csv")' % \
 			lmerVar)
 		while not os.path.exists('.rbridge-lmer.csv'):
 			time.sleep(.1)
@@ -202,50 +185,10 @@ class RBridge(object):
 				break
 			except:
 				time.sleep(1)
-		# If we don't want to use the pvals estimation, this is all we use.
-		if not pvals:
-			if not full:
-				dm = dm.selectColumns(['f0', 'stat', 'est', 'se', 'p', 'lwr', \
-					'upr'])
-				dm.rename('f0', 'effect')
-				dm.rename('lwr', 'ci95lo')
-				dm.rename('upr', 'ci95up')
-				dm.rename('stat', 't')
-			return dm
-		# If we do want to use the pvals estimation, we need to extract the
-		# column with t-values, so that we can add it to the pvals output, which
-		# doesn't contain this information.
-		os.remove('.rbridge-lmer.csv')
-		tvals = dm['stat']
-		se = dm['se']
-		self.write('library(languageR)')
-		self.write( \
-			'%s <- pvals.fnc(%s, nsim=%d, ndigits=20)' % \
-			(pvalsVar, lmerVar, nsim))
-		self.write('write.csv(%s$fixed, ".rbridge-lmer.csv")' % pvalsVar)
-		while not os.path.exists('.rbridge-lmer.csv'):
-			time.sleep(.1)
-		# Try this a few times, because sometimes the csv hasn't been written
-		# yet
-		for i in range(10):
-			try:
-				dm = CsvReader('.rbridge-lmer.csv').dataMatrix()
-				break
-			except:
-				time.sleep(1)
-		if not full:
-			dm = dm.selectColumns(['f0', 'Estimate', 'HPD95lower', \
-				'HPD95upper', 'Pr(>|t|)'])
-			dm.rename('f0', 'effect')
-			dm.rename('Estimate', 'est')
-			dm.rename('HPD95lower', 'ci95lo')
-			dm.rename('HPD95upper', 'ci95up')
-			dm.rename('Pr(>|t|)', 'p')
-			dm = dm.addField('t', dtype=float)
-			dm = dm.addField('se', dtype=float)
-			# Add the t-values, and strip the last rows, which are unused.
-			dm['t'] = tvals[:len(dm)]
-			dm['se'] = se[:len(dm)]
+		dm.rename('f0', 'effect')
+		dm.rename('Estimate', 'est')
+		dm.rename('Std. Error', 'se')
+		dm.rename('t value', 't')
 		return dm
 
 	def load(self, dm, frame='data'):
