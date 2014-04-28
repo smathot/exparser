@@ -24,14 +24,16 @@ from matplotlib import pyplot as plt
 from exparser.TangoPalette import *
 
 plotFolder = 'plot'
-if '--clear-plot' in sys.argv and os.path.exists(cacheFolder):
+if '--clear-plot' in sys.argv and os.path.exists(plotFolder):
 	print 'Removing plot folder (%s)' % plotFolder
+	import shutil
 	shutil.rmtree(plotFolder)
 plt.rc('font', family='Arial', size=10)
 
 # Some pre-defined sizes
 xs = 4, 4
 s = 6, 6
+ws = 6, 3
 r = 8, 8
 w = 12, 8
 h = 8, 12
@@ -50,7 +52,10 @@ def new(size=r):
 	A matplotlib figure.
 	"""
 
-	return plt.figure(figsize=size)
+	fig = plt.figure(figsize=size)
+	plt.subplots_adjust(left=.15, right=.9, bottom=.15, top=.9, wspace=.3,
+		hspace=.3)
+	return fig
 
 def regress(x, y, annotate=True, symbol='.', linestyle='--', symbolColor= \
 	blue[1], lineColor=blue[1]):
@@ -77,7 +82,7 @@ def regress(x, y, annotate=True, symbol='.', linestyle='--', symbolColor= \
 		plt.text(0.05, 0.95, 'r = %.3f, p = %.3f' % (r, p), ha='left', \
 			va='top', transform=plt.gca().transAxes)
 
-def save(name, show=False):
+def save(name, folder=None, show=False, dpi=200):
 
 	"""
 	Saves the current figure to the correct folder, depending on the active
@@ -87,22 +92,30 @@ def save(name, show=False):
 	name	--	The name for the figure.
 
 	Keyword arguments:
+	folder	--	A name for a subfolder to save the plot or None to save directly
+				in the plotFolder. (default=None)
 	show	--	Indicates whether the figure should be shown as well.
 				(default=False)
+	dpi		--	The dots per inch to use for the png export, or None to use
+				the default. (default=None)
 	"""
 
+	if folder != None:
+		_plotFolder = os.path.join(plotFolder, folder)
+	else:
+		_plotFolder = folder
 	try:
-		os.makedirs(os.path.join(plotFolder, 'svg'))
+		os.makedirs(os.path.join(_plotFolder, 'svg'))
 	except:
 		pass
 	try:
-		os.makedirs(os.path.join(plotFolder, 'png'))
+		os.makedirs(os.path.join(_plotFolder, 'png'))
 	except:
 		pass
-	pathSvg = os.path.join(plotFolder, 'svg', '%s.svg' % name)
-	pathPng = os.path.join(plotFolder, 'png', '%s.png' % name)
+	pathSvg = os.path.join(_plotFolder, 'svg', '%s.svg' % name)
+	pathPng = os.path.join(_plotFolder, 'png', '%s.png' % name)
 	plt.savefig(pathSvg)
-	plt.savefig(pathPng)
+	plt.savefig(pathPng, dpi=dpi)
 	if show:
 		plt.show()
 	else:
