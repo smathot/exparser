@@ -44,6 +44,7 @@ def cachedArray(func):
 
 	def inner(*args, **kwargs):
 
+		isCached = True
 		if 'cacheId' in kwargs:
 			cachePath = os.path.join(cacheFolder, kwargs['cacheId']) + '.npy'
 			del kwargs['cacheId']
@@ -77,6 +78,7 @@ def cachedDataMatrix(func):
 
 	def inner(*args, **kwargs):
 
+		isCached = True
 		if 'cacheId' in kwargs:
 			cachePath = os.path.join(cacheFolder, kwargs['cacheId']) + '.npy'
 			del kwargs['cacheId']
@@ -98,3 +100,14 @@ def cachedDataMatrix(func):
 		return dm
 
 	return inner
+
+def isCached(func):
+
+	"""
+	Checks whether a function is cachable.
+
+	Returns:
+	True if cachable, False otherwise.
+	"""
+
+	return 'isCached' in func.func_code.co_varnames
