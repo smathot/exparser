@@ -28,10 +28,10 @@ from exparser.TangoPalette import *
 from exparser.RBridge import RBridge
 from exparser.Cache import cachedArray, cachedDataMatrix
 
-def getTrace(dm, signal=None, phase=None, traceLen=None, offset=0, \
-	lock='start', traceTemplate='__trace_%s__', baseline=None, \
-	baselineLen=100, baselineOffset=0, baselineLock='end', smoothParams=None, \
-	**dummy):
+def getTrace(dm, signal=None, phase=None, traceLen=None, offset=0,
+	lock='start', traceTemplate='__trace_%s__', baseline=None,
+	baselineLen=100, baselineOffset=0, baselineLock='end', smoothParams=None,
+	nanPad=True, **dummy):
 
 	"""
 	Gets a trace for a single trial
@@ -59,6 +59,8 @@ def getTrace(dm, signal=None, phase=None, traceLen=None, offset=0, \
 	smoothParams	--	a {'windowLen' : [..], 'windowType' : [..]} dictionary
 						that is used to specify signal smoothing (see smooth()),
 						or None for no smoothing. (default=None)
+	nanPad			--	If set to True, traces that are shorter than traceLen
+						are padded with np.nan values.
 
 	Returns:
 	a 1D NumPy array with the trace
@@ -95,12 +97,15 @@ def getTrace(dm, signal=None, phase=None, traceLen=None, offset=0, \
 	# Paste the trace into a nan-filled trace that has exactly the desired
 	# length. This is necessary to deal with traces that are shorter than the
 	# specified traceLen.
-	aTrace = np.empty(traceLen)
-	aTrace[:] = np.nan
-	if lock == 'start':
-		aTrace[:len(_aTrace)] = _aTrace
+	if nanPad:
+		aTrace = np.empty(traceLen)
+		aTrace[:] = np.nan
+		if lock == 'start':
+			aTrace[:len(_aTrace)] = _aTrace
+		else:
+			aTrace[-len(_aTrace):] = _aTrace
 	else:
-		aTrace[-len(_aTrace):] = _aTrace
+		aTrace = _aTrace
 	# If we don't apply a baseline then return right away, possible after
 	# smoothing
 	if baseline == None:
@@ -157,8 +162,8 @@ def getTraceAvg(dm, avgFunc=nanmean, **traceParams):
 	errData = np.array( [errData, errData] )
 	return xData, yData, errData
 
-def plotTraceAvg(ax, dm, avgFunc=nanmean, lineColor=blue[0], errColor=gray[1], \
-	errAlpha=.4, label=None, _downSample=None, aErr=None, \
+def plotTraceAvg(ax, dm, avgFunc=nanmean, lineColor=blue[0], lineStyle='-',
+	errColor=gray[1], errAlpha=.4, label=None, _downSample=None, aErr=None,
 	orientation='horizontal', **traceParams):
 
 	"""
@@ -171,6 +176,7 @@ def plotTraceAvg(ax, dm, avgFunc=nanmean, lineColor=blue[0], errColor=gray[1], \
 	Keyword arguments:
 	avgFunc			--	see getTraceAvg()
 	lineColor		--	the line color (default=blue[0])
+	lineStyle		--	the line style (default='-')
 	errColor		--	the color for the error shading (default=gray[1])
 	errAlpha		--	the opacity for the error shading (default=.4)
 	traceTemplate	--	is used to determine the correct key from the DataMatrix
@@ -192,7 +198,7 @@ def plotTraceAvg(ax, dm, avgFunc=nanmean, lineColor=blue[0], errColor=gray[1], \
 		yData = downSample(yData, _downSample)
 		errData = downSample(errData, _downSample)
 	if orientation == 'horizontal':
-		ax.plot(xData, yData, color=lineColor, label=label)
+		ax.plot(xData, yData, color=lineColor, label=label, linestyle=lineStyle)
 		if errColor != None:
 			ax.fill_between(xData, yData-errData[0], yData+errData[1], \
 				color=errColor, alpha=errAlpha)
@@ -364,7 +370,8 @@ def mixedModelTrace(dm, model, winSize=1, pvals=True, nSim=1000, effectIndex=1, 
 		print
 	return aTVal
 
-def markStats(ax, aStat, below=True, thr=.05, minSmp=200, color=gray[1]):
+def markStats(ax, aStat, below=True, thr=.05, minSmp=200, color=gray[1],
+	alpha=.2):
 
 	"""
 	Marks all timepoints in a figure with colored shading when the significance
@@ -381,6 +388,7 @@ def markStats(ax, aStat, below=True, thr=.05, minSmp=200, color=gray[1]):
 	minSmp		--	the minimum number of consecutive significant samples
 					(default=10)
 	color		--	the color for the shading (default=gray[1])
+	alpha		--	The alpha value. (default=.2)
 	"""
 
 	iFrom = None
@@ -393,7 +401,8 @@ def markStats(ax, aStat, below=True, thr=.05, minSmp=200, color=gray[1]):
 		if ((not hit or (i == len(aStat)-1)) and iFrom != None):
 			if i-iFrom >= minSmp-1:
 				print 'Significant region: %d - %d' % (iFrom, i-1)
-				ax.axvspan(iFrom, i-1, ymax=1, color=color, zorder=-9999)
+				ax.axvspan(iFrom, i-1, ymax=1, color=color, zorder=-9999,
+					alpha=alpha)
 			iFrom = None
 
 def smooth(aTrace, windowLen=11, windowType='hanning', correctLen=True):
