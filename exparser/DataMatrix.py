@@ -245,7 +245,7 @@ class DataMatrix(BaseMatrix):
 			l.append(list(row))
 		return np.array(l, dtype='|S128')
 
-	def balance(self, col, maxErr, ref=0):
+	def balance(self, col, maxErr, ref=0, verbose=False):
 
 		"""
 		Filters the data such that a given column is on average close to a
@@ -257,6 +257,7 @@ class DataMatrix(BaseMatrix):
 
 		Keyword arguments:
 		ref		--	The reference value. (default=0)
+		verbose	--	Indicates whether verbose output is printed. (default=False)
 
 		Returns:
 		A balanced copy of the current DataMatrix.
@@ -276,19 +277,21 @@ class DataMatrix(BaseMatrix):
 			c, r = np.where(d == np.nanmin(d))
 			i1 = c[0]
 			i2 = r[0]
-			#print '%s -> %s' % (i1, i2)
+			if verbose:
+				print '%.5d\t->\t%.5d' % (i1, i2)
 			err = abs(a[i1][0]+a[i2][0])
 			pairs.append( (i1, i2, err) )
 			d[i1] = np.nan
 			d[:,i1] = np.nan
 			d[i2] = np.nan
 			d[:,i2] = np.nan
-		# Mark rows in a pairwise until the overall error is low enough.
+		# Mark rows in a pairwise fashion until the overall error is low enough.
 		toRemove = []
 		_dm = dm.clone()
 		while True:
 			err = _dm[col].mean()
-			print 'Error = %f' % err
+			if verbose:
+				print 'Error = %f' % err
 			#if abs(err) <= maxErr:
 				#print 'Done!'
 				#break

@@ -58,7 +58,7 @@ def new(size=r):
 	return fig
 
 def regress(x, y, annotate=True, symbol='.', linestyle='--', symbolColor= \
-	blue[1], lineColor=blue[1]):
+	blue[1], lineColor=blue[1], label=None):
 
 	"""
 	Creates a regression plot.
@@ -70,6 +70,10 @@ def regress(x, y, annotate=True, symbol='.', linestyle='--', symbolColor= \
 	Keyword arguments:
 	annotate	--	Indicates whether the correlation and p-value should be
 					marked in the plot. (default=True)
+
+	Returns:
+	The regression parameters as a (slope, intercept, correlation, p-value,
+	standard error) tuple
 	"""
 
 	from scipy.stats import linregress
@@ -77,10 +81,11 @@ def regress(x, y, annotate=True, symbol='.', linestyle='--', symbolColor= \
 	plt.plot(x, y, symbol, color=symbolColor)
 	xData = np.array([min(x), max(x)])
 	yData = i + s*xData
-	plt.plot(xData, yData, linestyle, color=lineColor)
+	plt.plot(xData, yData, linestyle, color=lineColor, label=label)
 	if annotate:
 		plt.text(0.05, 0.95, 'r = %.3f, p = %.3f' % (r, p), ha='left', \
 			va='top', transform=plt.gca().transAxes)
+	return s, i, r, p, se
 
 def save(name, folder=None, show=False, dpi=200):
 
@@ -103,7 +108,7 @@ def save(name, folder=None, show=False, dpi=200):
 	if folder != None:
 		_plotFolder = os.path.join(plotFolder, folder)
 	else:
-		_plotFolder = folder
+		_plotFolder = plotFolder
 	try:
 		os.makedirs(os.path.join(_plotFolder, 'svg'))
 	except:
