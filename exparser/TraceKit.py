@@ -205,7 +205,7 @@ def plotTraceAvg(ax, dm, avgFunc=nanmean, lineColor=blue[0], lineStyle='-',
 	else:
 		ax.plot(yData, xData, color=lineColor, label=label)
 		if errColor != None:
-			ax.fill_betweenx(xData, yData-errData[0], yData+errData[1], \
+			ax.fill_betweenx(xData, yData-errData[0], yData+errData[1],
 				color=errColor, alpha=errAlpha)
 
 def plotTraceContrast(dm, select1, select2, color1=blue[1], color2=orange[1], \
@@ -307,7 +307,7 @@ def traceDiff(dm, select1, select2, epoch=None, **traceParams):
 	return d.mean()
 
 @cachedArray
-def mixedModelTrace(dm, model, winSize=1, pvals=True, nSim=1000, effectIndex=1, \
+def mixedModelTrace(dm, model, winSize=1, pvals=None, nSim=1000, effectIndex=1,
 	**traceParams):
 
 	"""
@@ -324,17 +324,20 @@ def mixedModelTrace(dm, model, winSize=1, pvals=True, nSim=1000, effectIndex=1, 
 	winSize			--	indicates the number of samples that should be skipped
 						each time. For a real analysis, this should be 1, but
 						for a quick look, it can be increased (default=1)
-	pvals			--	Indicates whether pvals.fnc() should be used to
-						estimate p-values. (default=True)
 	nSim			--	the number of similuations. This should be increased
 						for more accurate estimations (default=100)
 	effectIndex		--	The row-index of the relevant effect in the lmer
 						output. (default=1)
+	pvals			--	DEPRECATED
 	*traceParams	--	see getTrace()
 
 	Returns:
-	A (traceLen, 3) array, where the columns are [p-value, 95low, 95high].
+	A (traceLen, 3) array, where the columns are [t-value, error high,
+	error low].
 	"""
+
+	if pvals != None:
+		warnings.warn('pvals has been deprecated')
 
 	if not model.startswith('mmdv__ ~ '):
 		model = 'mmdv__ ~ ' + model
@@ -371,7 +374,7 @@ def mixedModelTrace(dm, model, winSize=1, pvals=True, nSim=1000, effectIndex=1, 
 	return aTVal
 
 def markStats(ax, aStat, below=True, thr=.05, minSmp=200, color=gray[1],
-	alpha=.2):
+	alpha=.2, loExt=False, hiExt=False):
 
 	"""
 	Marks all timepoints in a figure with colored shading when the significance
@@ -389,8 +392,16 @@ def markStats(ax, aStat, below=True, thr=.05, minSmp=200, color=gray[1],
 					(default=10)
 	color		--	the color for the shading (default=gray[1])
 	alpha		--	The alpha value. (default=.2)
+	loExt		--	Indicates whether intervals before the signal should be
+					treated as significant, such that at the start of the signal
+					there is no minimum number of samples. (default=False)
+	hiExt		--	Like `loExt`, but for the end of the signal. (default=False)
+
+	Returns:
+	A list of (start, end) tuples with significant regions
 	"""
 
+	lRoi = []
 	iFrom = None
 	for i in range(len(aStat)):
 		pVal = aStat[i]
@@ -399,11 +410,14 @@ def markStats(ax, aStat, below=True, thr=.05, minSmp=200, color=gray[1],
 			if iFrom == None:
 				iFrom = i
 		if ((not hit or (i == len(aStat)-1)) and iFrom != None):
-			if i-iFrom >= minSmp-1:
+			if i-iFrom >= minSmp-1 or (iFrom == 0 and loExt) or \
+				(i == len(aStat)-1 and hiExt):
 				print 'Significant region: %d - %d' % (iFrom, i-1)
 				ax.axvspan(iFrom, i-1, ymax=1, color=color, zorder=-9999,
 					alpha=alpha)
+				lRoi.append((iFrom, i-1))
 			iFrom = None
+	return lRoi
 
 def smooth(aTrace, windowLen=11, windowType='hanning', correctLen=True):
 
