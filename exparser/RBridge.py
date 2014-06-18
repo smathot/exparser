@@ -66,6 +66,7 @@ class RBridge(object):
 			os.remove('.rbridge-aov.txt')
 		# Peform aov
 		s = self.call('(%s <- aov(%s))' % (aovVar, formula))
+		print self.call('summary(aov1)')
 		# Summarize the data
 		self.write( \
 			'capture.output(summary(%s)$"Error: Within", file=".rbridge-aov.txt")' \
@@ -120,6 +121,51 @@ class RBridge(object):
 			except:
 				time.sleep(1)
 		dm.rename('f0', 'model')
+		return dm
+
+	def best(self, a1, a2=None, compVal=0, rope=[-1, 1], bestVar='BESTout',
+		steps=10000):
+
+		"""
+		Performs a Bayesian estimation, as an alternative to the t-test, using
+		the BEST package.
+
+		Arguments:
+		a1		--	The first array with test values.
+
+		Keyword arguments:
+		a2		--	The second array with test values. If not provided, a one
+					sample test is performed. (default=None)
+		compVal	--	The reference value.
+		rope	--	A two-value tuple specifying a 'region of practical
+					equivalence' (default=[-1, 1])
+		bestVar	--	The variable to store best output. (default='BESTout')
+		"""
+
+		if os.path.exists('.rbridge-best.csv'):
+			os.remove('.rbridge-best.csv')
+		self.write('library(BEST)')
+		l1 = [str(i) for i in a1]
+		self.write('a1 <- c(%s)' % (','.join(l1)))
+		if a2 != None:
+			l2 = [str(i) for i in a2]
+			self.write('a2 <- c(%s)' % (','.join(l2)))
+			self.call('%s <- BESTmcmc(a1, a2, numSavedSteps=%d)' % (bestVar,
+				steps))
+		else:
+			self.call('%s <- BESTmcmc(a1, numSavedSteps=%d)' % (bestVar, steps))
+		self.call('s <- summary(%s, compValeff=%f, ROPEm=c(%f, %f))' % (bestVar,
+			compVal, rope[0], rope[1]))
+		self.call('write.csv(s, ".rbridge-best.csv")')
+		# Try this a few times, because sometimes the csv hasn't been written
+		# yet
+		for i in range(100):
+			try:
+				dm = CsvReader('.rbridge-best.csv').dataMatrix()
+				break
+			except:
+				time.sleep(1)
+		dm = CsvReader('.rbridge-best.csv').dataMatrix()
 		return dm
 
 	def call(self, cmd):
@@ -252,3 +298,15 @@ class RBridge(object):
 		if cat:
 			_cmd += 'cat("end\\n")\n'
 		self.RProcess.stdin.write(_cmd)
+
+def R():
+
+	"""Returns a singleton R instance."""
+
+	global _R
+	try:
+		_R
+	except:
+		print('Creating new R instance')
+		_R = RBridge()
+	return _R
