@@ -29,10 +29,11 @@ class EyelinkAscFolderReader(BaseReader):
 
 	"""Parses Eyelink ASCII data"""
 
-	def __init__(self, path='data', ext='.asc', startTrialKey='start_trial', \
-		endTrialKey='stop_trial', variableKey='var', dtype='|S128', maxN=None, \
-		maxTrialId=None, requireEndTrial=True, traceFolder='traces', \
-		offlineDriftCorr=False, skipList=[], blinkReconstruct=False, only=None):
+	def __init__(self, path='data', ext='.asc', startTrialKey='start_trial',
+		endTrialKey='stop_trial', variableKey='var', dtype='|S128', maxN=None,
+		maxTrialId=None, requireEndTrial=True, traceFolder='traces',
+		offlineDriftCorr=False, skipList=[], blinkReconstruct=False, only=None,
+		acceptNonMatchingColumns=False):
 
 		"""
 		Constructor. Reads all Eyelink ASCII files from a specific folder.
@@ -69,6 +70,15 @@ class EyelinkAscFolderReader(BaseReader):
 		only			--	A list of files that should be analyzed, or None
 							to analyze all files. Mostly useful for debugging
 							purposes. (default=None)
+		acceptNonMatchingColumns	--- Boolean indicating whether or not to 
+										raise an exception if current dm and 
+										to-be-added dm
+										do not have identical column headers.
+										If set to True, the intersection of
+										column headers is used and the check
+										is not carried out. If set to False,
+										the the check is carried out. 
+										(default=False)
 		"""
 
 		self.startTrialKey = startTrialKey
@@ -84,6 +94,7 @@ class EyelinkAscFolderReader(BaseReader):
 		self.driftAdjust = 0,0
 		self.skipList = skipList
 		self.blinkReconstruct = blinkReconstruct
+		self.acceptNonMatchingColumns = acceptNonMatchingColumns
 
 		print '\nScanning \'%s\'' % path
 		self.dm = None
@@ -96,11 +107,18 @@ class EyelinkAscFolderReader(BaseReader):
 				sys.stdout.write('Reading %s ...' % fname)
 				sys.stdout.flush()
 				a = self.parseFile(os.path.join(path, fname))
-				dm = DataMatrix(a)
+				dm = DataMatrix(a)				
 				if self.dm == None:
 					self.dm = dm
 				else:
+					if not self.acceptNonMatchingColumns:
+						if self.dm.columns() != dm.columns():
+							msgException = "The column headers are not identical. Difference: %s"\
+								% "\n".join(list(set(self.dm.columns()).\
+									symmetric_difference(set(dm.columns()))))
+							raise Exception(msgException)					
 					self.dm += dm
+
 				print '(%d rows)' % len(dm)
 				nFile += 1
 			if maxN != None and nFile >= maxN:
@@ -219,6 +237,7 @@ class EyelinkAscFolderReader(BaseReader):
 			if not os.path.exists(self.traceFolder):
 				print('Creating traceFolder: %s' % self.traceFolder)
 				os.makedirs(self.traceFolder)
+
 			np.save(path, a)
 			trialDict['__trace_%s__' % phase] = path
 			if '--traceplot' in sys.argv or '--traceimg' in sys.argv:
@@ -444,9 +463,9 @@ class EyelinkAscFolderReader(BaseReader):
 		else:
 			return
 
-		if var in trialDict:
-			warnings.warn('Variable \'%s\' occurs twice in trial %s' \
-				% (var, trialDict['trialId']))
+		#if var in trialDict:
+		#	warnings.warn('Variable \'%s\' occurs twice in trial %s' \
+		#		% (var, trialDict['trialId']))
 		trialDict[var] = val
 
 	def strToList(self, s):
