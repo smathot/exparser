@@ -33,7 +33,7 @@ class EyelinkAscFolderReader(BaseReader):
 		endTrialKey='stop_trial', variableKey='var', dtype='|S128', maxN=None,
 		maxTrialId=None, requireEndTrial=True, traceFolder='traces',
 		offlineDriftCorr=False, skipList=[], blinkReconstruct=False, only=None,
-		acceptNonMatchingColumns=False):
+		acceptNonMatchingColumns=True):
 
 		"""
 		Constructor. Reads all Eyelink ASCII files from a specific folder.
@@ -78,7 +78,7 @@ class EyelinkAscFolderReader(BaseReader):
 										column headers is used and the check
 										is not carried out. If set to False,
 										the the check is carried out. 
-										(default=False)
+										(default=True)
 		"""
 
 		self.startTrialKey = startTrialKey
@@ -108,15 +108,26 @@ class EyelinkAscFolderReader(BaseReader):
 				sys.stdout.flush()
 				a = self.parseFile(os.path.join(path, fname))
 				dm = DataMatrix(a)				
+
 				if self.dm == None:
 					self.dm = dm
 				else:
-					if not self.acceptNonMatchingColumns:
-						if self.dm.columns() != dm.columns():
-							msgException = "The column headers are not identical. Difference: %s"\
-								% "\n".join(list(set(self.dm.columns()).\
-									symmetric_difference(set(dm.columns()))))
-							raise Exception(msgException)					
+					
+					# If column headers are not identical:
+					if self.dm.columns() != dm.columns():
+						
+						# Determine warning message:
+						warningMsg = "The column headers are not identical. Difference:\n%s"\
+						% "\n".join(list(set(self.dm.columns()).\
+							symmetric_difference(set(dm.columns()))))
+						
+						# Determine whether to only print the warning,
+						# or to raise an exception:
+						if not acceptNonMatchingColumns:
+							raise Exception(warningMsg)
+						if acceptNonMatchingColumns:
+							print warningMsg
+					
 					self.dm += dm
 
 				print '(%d rows)' % len(dm)
