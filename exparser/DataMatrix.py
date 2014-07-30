@@ -719,12 +719,12 @@ class DataMatrix(BaseMatrix):
 		Returns:
 		A selection of the current DataMatrix
 		"""
-
-		print '======================================='
-		print '| Selecting based on Standard Deviation'
-		print '| Threshold: %.2f' % thr
-		print '| Keys: %s' % ','.join(keys)
-		print '|'
+		if verbose:
+			print '======================================='
+			print '| Selecting based on Standard Deviation'
+			print '| Threshold: %.2f' % thr
+			print '| Keys: %s' % ','.join(keys)
+			print '|'
 		dm = self.clone()
 
 		# Create a dummy field that combines the keys, so we can simply group
@@ -758,7 +758,7 @@ class DataMatrix(BaseMatrix):
 				print '| # outliers: %d of %d' % (len(i), len(iCond))
 			dm['__stdOutlier__'][i] = 1
 
-		dm = dm.select('__stdOutlier__ == 0')
+		dm = dm.select('__stdOutlier__ == 0', verbose = verbose)
 		print
 		return dm
 
