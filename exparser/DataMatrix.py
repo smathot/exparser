@@ -336,6 +336,9 @@ class DataMatrix(BaseMatrix):
 		A DataMatrix
 		"""
 
+		print "vName = ", vName
+		print "targetVName = ", targetVName
+
 		if keys != None:
 			l = [list(self.m.dtype.names)]
 			for dm in self.group(keys):
@@ -729,12 +732,14 @@ class DataMatrix(BaseMatrix):
 
 		# Create a dummy field that combines the keys, so we can simply group
 		# based on one key
+		dm = dm.removeField('__dummyCond__')
 		dm = dm.addField('__dummyCond__', dtype=str, default='__dummy__')
 		for key in keys:
 			for i in range(len(dm)):
 				dm['__dummyCond__'][i] += str(dm[key][i]) + '__'
 
 		# Add a field to store outliers
+		dm = dm.removeField('__stdOutlier__')
 		dm = dm.addField('__stdOutlier__', dtype=int)
 		dm['__stdOutlier__'] = 0
 
@@ -943,6 +948,7 @@ class DataMatrix(BaseMatrix):
 		whiten -- indicates whether the data should be whitened so that the
 				  standard deviation is 1 and the mean 0 (default=False)
 		"""
+		
 
 		self.m[targetVName] = self.m[vName]
 		gAvg = self.m[targetVName].mean()
