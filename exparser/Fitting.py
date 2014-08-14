@@ -22,18 +22,53 @@ from exparser.TangoPalette import *
 import numpy as np
 from matplotlib import pyplot as plt
 
+def exgauss(x, m=0., s=1., l=1.):
+
+	"""
+	desc:
+		Fits an exponentially modified Gaussian distribution, suitable for
+		modelling skewed RT distributions.
+
+	arguments:
+		x:
+			desc:	The X data.
+			type:	ndarray
+
+	keywords:
+		m:
+			desc:	The mean of the Gaussian.
+			type:	[int, float]
+		s:
+			desc:	The standard deviation of the Gaussian.
+			type:	[int, float]
+		l:
+			desc:	The inverse of the exponential paramater.
+			type:	[int, float]
+
+	returns:
+		desc:	The Y data.
+		type:	ndarray
+	"""
+
+	from scipy.special import erfc
+	m = float(m)
+	s = float(s)
+	l = float(l)
+	return l/2*np.e**( (l/2) * (2*m+l*s**2-2*x) ) * \
+		erfc( (m+l*s**2-x) / (np.sqrt(2)*s) )
+
 def sigmoid(x, x0=0, k=1):
-	
+
 	"""
 	A logistic sigmoid function, useful for fitting cumulative distributions.
-	
+
 	Arguments:
 	x		--	The X data.
-	
+
 	Keyword arguments:
 	x0		--	The .5 point. (default=0)
 	k		--	The steepness. (default=1)
-	
+
 	Returns:
 	A cumulative distribition from 0 to 1
 	"""
@@ -42,15 +77,15 @@ def sigmoid(x, x0=0, k=1):
 	return y
 
 def HL1993(t, n=10.1, tMax=930, pMin=0, pMax=1):
-	
+
 	"""
 	An exponential pupil model for a transient pupillary response, as
 	described by Hoeks and Levelt (1993). Default parameters have been estimated
 	empirically by Hoeks and Levelt (1993).
-	
+
 	Arguments:
 	t		--	Time series.
-	
+
 	Keyword arguments:
 	n			--	The number of layers (actually corresponds to n+1).
 					(default=10.1)
@@ -63,20 +98,20 @@ def HL1993(t, n=10.1, tMax=930, pMin=0, pMax=1):
 	Returns:
 	An array with pupil size values.
 	"""
-	
-	a = t**n * np.exp(-n*t/tMax)	
+
+	a = t**n * np.exp(-n*t/tMax)
 	a /= a.max()
 	a = a * (pMax-pMin) + pMin
 	return a
 
 def HL1993D(t, n=10.1, tMax=930, pMin=1., vMin=0, vMax=1):
-	
+
 	"""
 	Applying the HL algorithm to the velocity profile of the signal.
-	
+
 	Arguments:
 	t		--	Time series.
-	
+
 	Keyword arguments:
 	n			--	The number of layers (actually corresponds to n+1).
 					(default=10.1)
@@ -89,7 +124,7 @@ def HL1993D(t, n=10.1, tMax=930, pMin=1., vMin=0, vMax=1):
 	Returns:
 	An array with pupil size values.
 	"""
-	
+
 	p = pMin
 	l = []
 	for v in HL1993(t, n=n, tMax=tMax, pMin=vMin, pMax=vMax):
@@ -98,13 +133,13 @@ def HL1993D(t, n=10.1, tMax=930, pMin=1., vMin=0, vMax=1):
 	return np.array(l)
 
 def PLRExp(t, n=10.1, t0=250, tMax=930, ps=1, pd=.6):
-	
+
 	"""
 	An exponential PLR function.
-	
+
 	Arguments:
 	t			--	Time series.
-	
+
 	Keyword arguments:
 	n			--	The number of layers (actually corresponds to n+1).
 					(default=10.1)
@@ -118,54 +153,54 @@ def PLRExp(t, n=10.1, t0=250, tMax=930, ps=1, pd=.6):
 	Returns:
 	An array with pupil size values.
 	"""
-	
+
 	a = np.exp(-n*(t-t0)/tMax)
 	a[np.where(t < t0)] = 1
 	a -= 1
-	a *= pd	
+	a *= pd
 	a += ps
 	return a
 
 def PLRWeibull(t, t0=150, k=2, L=200, ps=1., pd=.6):
-	
+
 	"""
 	Keyword arguments:
 	t0		--	The latency of the PLR.
 	k		--	Shape parameter.
 	L		--	Decay parameter.
 	"""
-	
+
 	a = np.exp( -((t-t0)/L)**k * np.log(2) )
 	a[np.where(t<t0)] = 1
 	a -= 1
-	a *= pd	
+	a *= pd
 	a += ps
 	return a
 
 def fit(x, y, func, p0=None, plot=False, color=blue[2]):
-	
+
 	"""
 	Uses `scipy.optimize.curve_fit()` to fit a set of data using any function.
 	Optionally, the data is plotted to the currently active axis.
-	
+
 	Arguments:
 	x		--	The X data.
 	y		--	The Y data.
 	func	--	The function to fit.
-	
+
 	Keyword arguments:
 	p0		--	Initial guess for the parameters for `func`. (default=None)
 	plot	--	Indicates whether the fit should be plotted. (default=False)
 	color	--	Indicates the line color, in case plot==True. (default=blue[2])
-	
+
 	Returns:
 	An (residuals, params) tuple if the fit was successful or (np.nan, np.nan)
 	if it was not.
 	"""
-	
+
 	from scipy.optimize import curve_fit
 	try:
-		popt, pcov = curve_fit(func, x, y, p0=p0)	
+		popt, pcov = curve_fit(func, x, y, p0=p0)
 	except:
 		print 'Failed to fit!'
 		return None, None
@@ -173,7 +208,7 @@ def fit(x, y, func, p0=None, plot=False, color=blue[2]):
 	return np.sqrt(np.sum((y - func(x, *popt))**2)) / len(x), popt
 
 if __name__ == '__main__':
-	
+
 	i = 1
 	t = np.linspace(0, 2000)
 	for func in HL1993, HL1993D, PLRExp, PLRWeibull:
@@ -181,5 +216,5 @@ if __name__ == '__main__':
 		plt.plot(t, func(t))
 		i += 1
 	plt.show()
-		
-	
+
+
