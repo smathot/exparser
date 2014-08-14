@@ -374,7 +374,7 @@ def mixedModelTrace(dm, model, winSize=1, pvals=None, nSim=1000, effectIndex=1,
 	return aTVal
 
 def markStats(ax, aStat, below=True, thr=.05, minSmp=200, color=gray[1],
-	alpha=.2, loExt=False, hiExt=False):
+	alpha=.2, loExt=False, hiExt=False, showSpurious=False):
 
 	"""
 	Marks all timepoints in a figure with colored shading when the significance
@@ -396,6 +396,9 @@ def markStats(ax, aStat, below=True, thr=.05, minSmp=200, color=gray[1],
 					treated as significant, such that at the start of the signal
 					there is no minimum number of samples. (default=False)
 	hiExt		--	Like `loExt`, but for the end of the signal. (default=False)
+	showSpurious	-- 	Indicates whether 'spurious' signficant points should be
+						shown as well. I.e. those that are do not meet the
+						minSmp threshold.
 
 	Returns:
 	A list of (start, end) tuples with significant regions
@@ -403,10 +406,13 @@ def markStats(ax, aStat, below=True, thr=.05, minSmp=200, color=gray[1],
 
 	lRoi = []
 	iFrom = None
+	aSign = np.zeros(len(aStat))
+	aSpurious = np.zeros(len(aStat))
 	for i in range(len(aStat)):
 		pVal = aStat[i]
 		hit = (pVal < thr and below) or (pVal > thr and not below)
 		if hit:
+			aSpurious[i] = 1
 			if iFrom == None:
 				iFrom = i
 		if ((not hit or (i == len(aStat)-1)) and iFrom != None):
@@ -416,7 +422,13 @@ def markStats(ax, aStat, below=True, thr=.05, minSmp=200, color=gray[1],
 				ax.axvspan(iFrom, i-1, ymax=1, color=color, zorder=-9999,
 					alpha=alpha)
 				lRoi.append((iFrom, i-1))
+				aSign[iFrom:i-1] = 1
 			iFrom = None
+	if showSpurious:
+		aSpurious[np.where(aSign == 1)] = 0
+		for i in np.where(aSpurious == 1)[0]:
+			print 'Spurious %d' % i
+			ax.axvline(i, color='black')
 	return lRoi
 
 def smooth(aTrace, windowLen=11, windowType='hanning', correctLen=True):
