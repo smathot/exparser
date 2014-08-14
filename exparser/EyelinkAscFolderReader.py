@@ -70,14 +70,14 @@ class EyelinkAscFolderReader(BaseReader):
 		only			--	A list of files that should be analyzed, or None
 							to analyze all files. Mostly useful for debugging
 							purposes. (default=None)
-		acceptNonMatchingColumns	--- Boolean indicating whether or not to 
-										raise an exception if current dm and 
+		acceptNonMatchingColumns	--- Boolean indicating whether or not to
+										raise an exception if current dm and
 										to-be-added dm
 										do not have identical column headers.
 										If set to True, the intersection of
 										column headers is used and the check
 										is not carried out. If set to False,
-										the the check is carried out. 
+										the the check is carried out.
 										(default=True)
 		"""
 
@@ -107,27 +107,27 @@ class EyelinkAscFolderReader(BaseReader):
 				sys.stdout.write('Reading %s ...' % fname)
 				sys.stdout.flush()
 				a = self.parseFile(os.path.join(path, fname))
-				dm = DataMatrix(a)				
+				dm = DataMatrix(a)
 
 				if self.dm == None:
 					self.dm = dm
 				else:
-					
+
 					# If column headers are not identical:
 					if self.dm.columns() != dm.columns():
-						
+
 						# Determine warning message:
 						warningMsg = "The column headers are not identical. Difference:\n%s"\
 						% "\n".join(list(set(self.dm.columns()).\
 							symmetric_difference(set(dm.columns()))))
-						
+
 						# Determine whether to only print the warning,
 						# or to raise an exception:
 						if not acceptNonMatchingColumns:
 							raise Exception(warningMsg)
 						if acceptNonMatchingColumns:
 							print warningMsg
-					
+
 					self.dm += dm
 
 				print '(%d rows)' % len(dm)
@@ -278,7 +278,8 @@ class EyelinkAscFolderReader(BaseReader):
 				if not os.path.exists(os.path.join(self.traceFolder, 'png')):
 					print('Creating traceImgFolder: %s' % os.path.join( \
 						self.traceFolder, 'png'))
-				os.makedirs(self.traceFolder)
+				if not os.path.exists(os.path.join(self.traceFolder, 'png')):
+					os.makedirs(os.path.join(self.traceFolder, 'png'))
 				plt.savefig(path)
 			if '--traceplot' in sys.argv:
 				plt.show()
