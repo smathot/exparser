@@ -656,6 +656,9 @@ class DataMatrix(BaseMatrix):
 		A DataMatrix
 		"""
 
+		if len(self) == 0:
+			warnings.warn('Selecting from empty DataMatrix (%s)' % query)
+			return self.clone()
 		l = query.split(' ')
 		vName = l[0]
 		op = l[1]
