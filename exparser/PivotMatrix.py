@@ -379,19 +379,20 @@ class PivotMatrix(BaseMatrix):
 		colors = []
 		x = 0
 
-		for dm in self.dm.group(v2):
+		for dm in self.dm.group(v1):
 			colNr = -1
+			
 
-			l2 = unicode(dm[v2][0])
-			_xLabels.append(l2)
+			l1 = unicode(dm[v1][0])
+			_xLabels.append(l1)
 			left = x
 
 			_lLabels = []
-			for _dm in dm.group(v1):
+			for _dm in dm.group(v2):
 				# Get legend labels
-				if v1 != []:
-					l1 = _dm[v1][0]
-					_lLabels.append(unicode(l1))
+				if v2 != []:
+					l2 = _dm[v2][0]
+					_lLabels.append(unicode(l2))
 
 		# Optionally create a new figure
 		if fig == None:
