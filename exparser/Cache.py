@@ -21,6 +21,7 @@ import os
 import sys
 import time
 import numpy as np
+import shutil
 from exparser.DataMatrix import DataMatrix
 
 skipCache = '--no-cache' in sys.argv
