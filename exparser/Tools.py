@@ -21,6 +21,7 @@ import sys
 from exparser.DataMatrix import DataMatrix
 from exparser import Cache
 import time
+import warnings
 
 def callFunc(dm, mods, func, cachePrefix='autoCache.', redo=False):
 
@@ -44,6 +45,7 @@ def callFunc(dm, mods, func, cachePrefix='autoCache.', redo=False):
 
 	if func[0] == '@':
 		func = func[1:]
+	found = False
 	for mod in mods:
 		if hasattr(mod, func):
 			t1 = time.time()
@@ -62,7 +64,10 @@ def callFunc(dm, mods, func, cachePrefix='autoCache.', redo=False):
 				dm = retVal
 			print '-> Finished %s.%s() in %.2f s' % (mod.__name__, func,
 				time.time()-t1)
+			found = True
 			break # Break in case the same function occurs in multiple modules
+	if not found:
+		warnings.warn('Helper function %s does not exist' % func)
 	return dm
 
 def analysisLoop(dm, mods=[], pre=[], post=[], full=[],
