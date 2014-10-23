@@ -32,24 +32,30 @@ from exparser import Constants
 
 class DataMatrix(BaseMatrix):
 
-	"""Provides functionality for convenient processing of experimental data"""
+	"""
+	desc:
+		Provides functionality for convenient processing of experimental data.
+	"""
 
 	def __init__(self, a, structured=False):
 
 		"""
-		Constructor. Creates a DataMatrix from a np array. If this array is
-		not stuctured, it is assumed to have column names on the first row and
-		values in the other rows, and to be of a string type
+		desc: |
+			Creates a new DataMatrix object.
 
-		Arguments:
-		a -- a np array or list. It can also be a filename, in which case it
-			 will be interpreted as a .npy file.
+		arguments:
+			a:
+				desc:	A NumPy array, list, or filename. For unstructured
+						NumPy arrays or lists, the first row is assumed to
+						contain column names. Filenames are assumed to refer to
+						a `.npy` file.
+				type:	[ndarray, list, str, unicode]
 
 
-		Keyword arguments:
-		structured -- indicates whether the passed array is structured. If not,
-					  a structured array will be created, assuming that the
-					  first row contains the column names. (default=False)
+		keywords:
+			structured:
+				desc:	Indicates whether `a` is a structured NumPy array.
+				type:	bool
 		"""
 
 		# Load from disk
@@ -111,42 +117,50 @@ class DataMatrix(BaseMatrix):
 							"Column %d is not numeric but '%s'. Falling back to 0" \
 							% (j, vVals[i][j]))
 
-	def __getitem__(self, vName):
+	def __getitem__(self, key):
 
 		"""
-		Returns a column, index, or slice. Valid calls are. Note that some
-		operations return a copy of the DataMatrix, so they cannot be used to
-		modify the contents of the DataMatrix.
+		desc:
+			Returns a column, index, or slice. Note that some operations return
+			a copy of the DataMatrix, so they cannot be used to modify the
+			contents of the DataMatrix.
 
-		Exmaple:
-		>>> dm[0]['rt'] = 1 # This doesn't alter the original DataMatrix
-		>>> dm['rt'][0] = 1 # This does!
+		example: |
+			dm['rt'] # returns column 'rt' as numpy array
+			dm[0] # returns first row as DataMatrix
+			dm[0:2] # returns first two rows as DataMatrix
+			dm[0]['rt'] = 1 # This doesn't alter the original DataMatrix
+			dm['rt'][0] = 1 # This does!
 
-		Example:
-		>>> dm['rt'] # returns column 'rt' as numpy array
-		>>> dm[0] # returns first row as DataMatrix
-		>>> dm[0:2] # returns first two rows as DataMatrix
+		arguments:
+			key:
+				desc:	A column name or index.
+				type:	[int, str, unicode]
 
-		Arguments:
-		vName 	--	the name of the variable
+		returns:
+			desc:	A DataMatrix or NumPy array corresponding to a slice or
+					column from this DataMatrix.
+			type:	[DataMatrix, ndarray]
 		"""
 
-		if type(vName) == int:
-			a = np.array(self.m[vName])
+		if type(key) == int or type(key) == np.int64:
+			a = np.array(self.m[key])
 			a.shape = (1,)
 			return DataMatrix(a, structured=True)
-		elif isinstance(vName, basestring):
-			return self.m[vName]
-		elif isinstance(vName, slice) or isinstance(vName, list):
-			return DataMatrix(self.m[vName], structured=True)
+		elif isinstance(key, basestring):
+			return self.m[key]
+		elif isinstance(key, slice) or isinstance(key, list) \
+			or isinstance(key, np.ndarray):
+			return DataMatrix(self.m[key], structured=True)
 		else:
-			raise Exception('Cannot get %s (%s)' % (vName, type(vName)))
+			raise Exception('Cannot get %s (%s)' % (key, type(key)))
 
 	def __len__(self):
 
 		"""
-		Returns:
-		The number of rows
+		returns:
+			desc:	The number of rows.
+			type:	int
 		"""
 
 		return len(self.m)
@@ -154,18 +168,23 @@ class DataMatrix(BaseMatrix):
 	def __add__(self, dm, cautious=False):
 
 		"""
-		Concatenates two DataMatrices. Implements the + operator.
+		desc:
+			Concatenates two DataMatrices. Implements the + operator.
 
-		Arguments:
-		dm			--	the DataMatrix to be appended
+		arguments:
+			dm:
+				desc:	The DataMatrix to be appended.
+				type:	DataMatrix
 
-		Keyword arguments:
-		cautious		--	indicates the the addition should happen by
-						reconstructing the new DataMatrix column by columns
-						(default=False)
+		keywords:
+			cautious:	DEPRECATED
 
-		Returns:
-		The concatenation of the current and the passed DataMatrix
+		example: |
+			dm3 = dm1 + dm2
+
+		returns:
+			desc:	The concatenation of the current and the passed DataMatrix.
+			type:	DataMatrix
 		"""
 
 		cols = np.intersect1d(self.columns(), dm.columns())
@@ -185,59 +204,87 @@ class DataMatrix(BaseMatrix):
 			i += 1
 		return DataMatrix(a)
 
-	def __setitem__(self, vName, vVal):
+	def __setitem__(self, key, val):
 
 		"""
-		Set a certain variable
+		desc:
+			Set a certain variable. Implements assigment.
 
-		Arguments:
-		vName -- the name of the variable
-		vVal -- an array with the new values
+		arguments:
+			key:
+				desc:	The name of a key.
+				type:	[str, unicode]
+			val:
+				desc:	An array with the new values, or a single new value to
+						use for the entire column.
+
+		example: |
+			dm['rt'] = 100
 		"""
 
-		self.m[vName] = vVal
+		self.m[key] = val
 
 	def __iter__(self):
 
-		"""Implements an iterator for 'for' loops"""
+		"""
+		desc:
+			Implements an iterator for 'for' loops to walk through a DataMatrix
+			row by row.
+
+		example: |
+			for rowDm in dm:
+				print rowDm
+
+		returns:
+			type:	DataMatrixIterator
+		"""
 
 		return DataMatrixIterator(self)
 
-	def addField(self, vName, dtype=np.int32, default=None):
+	def addField(self, key, dtype=np.int32, default=None):
 
 		"""
-		Creates a new DataMatrix that is a copy of the current DataMatrix with
-		an additional field.
 
-		Modified from: <http://stackoverflow.com/questions/1201817/\
+		desc:
+			Creates a new DataMatrix that is a copy of the current DataMatrix
+			with an additional field.
+
+		source:
+			http://stackoverflow.com/questions/1201817/\
 			adding-a-field-to-a-structured-numpy-array>
 
-		Arguments:
-		vName		--	The name of the new field.
+		arguments:
+			key:
+				desc:	The name of the new field.
+				type:	[str, unicode]
 
-		Keyword arguments:
-		dtype		--	The dtype for the new field. (default=np.int32)
-		default		--	The default value or None for no default. (default=None)
+		keywords:
+			dtype:		The dtype for the new field.
+			default:	The default value or `None` for no default.
 
-		Returns:
-		A DataMatrix.
+		example: |
+			dm = dm.addField('rt', dtype=float, default=-1000)
+
+		returns:
+			type:	DataMatrix.
 		"""
 
-		if vName in self.columns():
-			raise Exception('field "%s" already exists' % vName)
-		a = np.zeros(self.m.shape, dtype=self.m.dtype.descr + [(vName, dtype)])
+		if key in self.columns():
+			raise Exception('field "%s" already exists' % key)
+		a = np.zeros(self.m.shape, dtype=self.m.dtype.descr + [(key, dtype)])
 		for name in self.m.dtype.names:
 			a[name] = self.m[name]
 		dm = DataMatrix(a, structured=True)
 		if default != None:
-			dm[vName] = default
+			dm[key] = default
 		return dm
 
 	def asArray(self):
 
 		"""
-		Returns:
-		An array representation
+		returns:
+			desc:	An array representation of the current DataMatrix.
+			type:	ndarray
 		"""
 
 		l = [list(self.m.dtype.names)]
@@ -245,28 +292,38 @@ class DataMatrix(BaseMatrix):
 			l.append(list(row))
 		return np.array(l, dtype='|S128')
 
-	def balance(self, col, maxErr, ref=0, verbose=False):
+	def balance(self, key, maxErr, ref=0, verbose=False):
 
 		"""
-		Filters the data such that a given column is on average close to a
-		reference value, and is symetrically and normally distributed.
+		desc:
+			Filters the data such that a given column is on average close to a
+			reference value, and is symetrically distributed.
 
-		Arguments:
-		col		--	The column to balance.
-		maxErr	--	The maximum mean error relative to the reference value.
+		arguments:
+			key:
+				desc:	The key to balance. It must have a numeric dtype.
+				type:	[str, unicode]
+			maxErr:
+				desc:	The maximum mean error relative to the reference value.
+				type:	[int, float]
 
-		Keyword arguments:
-		ref		--	The reference value. (default=0)
-		verbose	--	Indicates whether verbose output is printed. (default=False)
+		keywords:
+			ref:
+				desc:	The reference value.
+				type:	[int, float]
+			verbose:
+				desc:	Indicates whether verbose output is printed.
+				type:	bool
 
-		Returns:
-		A balanced copy of the current DataMatrix.
+		returns:
+			desc:	A balanced copy of the current DataMatrix.
+			type:	DataMatrix
 		"""
 
 		dm = self.clone()
 
 		# Create a distance matrix for the values, with the diagonal set to nan
-		a = dm[col] - ref
+		a = dm[key] - ref
 		a.shape = len(a), 1 # cdist requires 2D array
 		d = cdist(a, -a)
 		np.fill_diagonal(d, np.nan)
@@ -289,18 +346,18 @@ class DataMatrix(BaseMatrix):
 		toRemove = []
 		_dm = dm.clone()
 		while True:
-			err = _dm[col].mean()
+			err = _dm[key].mean()
 			if verbose:
 				print 'Error = %f' % err
 			#if abs(err) <= maxErr:
 				#print 'Done!'
 				#break
 			if len(pairs) == 1:
-				#print 'Set exhausted'
+				#print 'Set exhausted' (default=False)
 				break
 			i1, i2, err = pairs.pop()
-			v1 = dm[col][i1]
-			v2 = dm[col][i2]
+			v1 = dm[key][i1]
+			v2 = dm[key][i2]
 			pErr = v2+v1
 
 			if abs(pErr) <= maxErr:
@@ -319,21 +376,30 @@ class DataMatrix(BaseMatrix):
 	def calcPerc(self, vName, targetVName, keys=None, nBin=None):
 
 		"""
-		Calculates percentile scores for a variable
+		desc:
+			Calculates percentile scores for a variable.
 
-		Arguments:
-		vName -- the variable to calculate percentile scores for
-		targetVName -- the variable to store the percentile scores in. This
-					   variable must exist, it is not created.
+		arguments:
+			vName:
+				desc:	The variable to calculate percentile scores for.
+				type:	[str, unicode]
+			targetVName:
+				desc:	The variable to store the percentile scores in. This
+						variable must exist, it is not created.
+				type:	[str, unicode]
 
-		Keyword arguments:
-		keys -- keys to split the data by, before calculating percentile
-				scores, so you can calculate scores individually per subject,
-				condition, etc. (default=None)
-		nBin -- the number of bins or None for continues scores (default=None)
+		keywords:
+			keys:
+				desc:	A key or list of keys to split the data by, before
+						calculating percentile scores, so you can calculate
+						scores individually per subject, condition, etc.
+				type:	[list, str, unicode]
+			nBin:
+				desc:	The number of bins or None for continuous scores.
+				type:	[int, NoneType]
 
-		Returns:
-		A DataMatrix
+		returns:
+			type:	DataMatrix
 		"""
 
 		print "vName = ", vName
@@ -362,17 +428,23 @@ class DataMatrix(BaseMatrix):
 	def collapse(self, keys, vName):
 
 		"""
-		Collapse the data by a (list of) keys and get statistics on a dependent
-		variable.
+		desc:
+			Collapse the data by a (list of) keys and get statistics on a
+			dependent variable.
 
-		Arguments:
-		keys -- a list of key names
-		vName -- the dependent variable to collapse. Alternative, you can
-				 specifiy a function, in which case the error will be 0.
+		arguments:
+			keys:
+				desc:	A key or list of keys to collapse the data on.
+				type:	[list, str, unicode]
+			vName:
+				desc:	The dependent variable to collapse. Alternative, you can
+						specifiy a function, in which case the error will be 0.
+				type:	[str, unicode, function]
 
-		Returns:
-		A DataMatrix with the collapsed data, with the following descriptives on
-		the vName variable
+		returns:
+			desc:	A DataMatrix with the collapsed data, with the descriptives
+					statistics on `vName`.
+			type:	DataMatrix
 		"""
 
 		if isinstance(keys, basestring):
@@ -404,31 +476,40 @@ class DataMatrix(BaseMatrix):
 	def columns(self, dtype=False):
 
 		"""
-		Returns a description of the columns
+		desc:
+			Returns a list of the columns.
 
-		Keyword arguments:
-		dtype -- indicates if the datatype for each column should be returned as
-				 well (default=False)
+		keywords:
+			dtype:
+				desc:	Indicates whether the dtype for each column should be
+						returned as well.
+				type:	bool
 
-		Returns:
-		If dtype == False: A list of names
-		If dtype == True: A list of (name, dtype) tuples
+		returns:
+			desc: |
+				If dtype == False: A list of names
+				If dtype == True: A list of (name, dtype) tuples
+			type:	list
 		"""
 
 		if dtype:
 			return self.m.dtype.descr
 		return list(self.m.dtype.names)
 
-	def count(self, dv):
+	def count(self, key):
 
 		"""
-		Returns the number of different values for a given variable.
+		desc:
+			Returns the number of different values for a given variable.
 
-		Arguments:
-		dv	--	The variable to count.
+		arguments:
+			key:
+				desc:	The variable to count.
+				type:	[str, unicode]
 
-		Returns:
-		The number of different values for 'dv'.
+		returns:
+			desc:	The number of different values for 'key'.
+			type:	int
 		"""
 
 		return len(self.unique(dv))
@@ -436,14 +517,18 @@ class DataMatrix(BaseMatrix):
 	def explode(self, N):
 
 		"""
-		Break up the DataMatrix in N smaller DataMatrices. For splitting a
-		DataMatrix based on column values, see `DataMatrix.split()`.
+		desc:
+			Break up the DataMatrix in N smaller DataMatrices. For splitting a
+			DataMatrix based on column values, see [DataMatrix.split].
 
-		Arguments:
-		N		--	the number of DataMatrices to explode in.
+		arguments:
+			N:
+				desc:	The number of DataMatrices to explode in.
+				type:	int
 
-		Returns:
-		A list of DataMatrices
+		returns:
+			desc:	A list of DataMatrices.
+			type:	list
 		"""
 
 		l = []
@@ -452,44 +537,30 @@ class DataMatrix(BaseMatrix):
 			l.append(dm)
 		return l
 
-	def indices(self, query):
-
-		"""
-		Return the indices of all rows that match the query.
-
-		Arguments:
-		query -- a query, e.g. 'rt > 1000'
-
-		Returns:
-		A list of indices.
-		"""
-
-		l = query.split(' ')
-		vName = l[0]
-		op = l[1]
-		test = query[len(vName)+len(op)+1:]
-		flt = eval('self.m[vName] %s %s' % (op, test))
-		if type(flt) == bool: # The whole array is selected
-			return range(len(self))
-		return flt
-
 	def intertrialer(self, keys, dv, _range=[1]):
 
 		"""
-		Adds columns that contain values from the previous or next trial. These
-		columns are called '[dv]_p1' for the next value, '[dv]_m1' for the
-		previous one, etc.
+		desc:
+			Adds columns that contain values from the previous or next trial.
+			These columns are called '[dv]_p1' for the next value, '[dv]_m1' for
+			the previous one, etc.
 
-		Arguments:
-		keys -- a list of keys that define the trial order.
-		dv -- the dependent variable
+		arguments:
+			keys:
+				desc:	A key or list of keys that define the trial order.
+				type:	[list, str, unicode]
+			dv:
+				desc:	The dependent variable.
+				type:	[str, unicode]
 
-		Keyword argument:
-		_range -- a list of integers that specifies the range for which the
-				  operation should be executed (default=[1])
+		keywords:
+			_range:
+				desc:	A list of integers that specifies the range for which
+						the operation should be executed.
+				type:	list
 
-		Returns:
-		A new DataMatrix
+		returns:
+			type:	DataMatrix
 		"""
 
 		dm = self.clone()
@@ -511,10 +582,11 @@ class DataMatrix(BaseMatrix):
 	def range(self):
 
 		"""
-		Gives a list of indices to walk through the current DataMatrix.
+		desc:
+			Gives a list of indices to walk through the current DataMatrix.
 
-		Returns:
-		A list of indices.
+		returns:
+			A list of indices.
 		"""
 
 		return range(len(self))
@@ -522,15 +594,20 @@ class DataMatrix(BaseMatrix):
 	def recode(self, key, coding):
 
 		"""
-		Recodes values (i.e. changes one value into another for a given set of
-		columns).
+		desc:
+			Recodes values (i.e. changes one value into another for a given set
+			of columns).
 
-		Arguments:
-		key 	--	The name of the variable to recode, or a list of names to
-					recode multiple variables in one go.
-		coding	--	An (oldValue, newValue) tuple, a list of tuples to handle
-					multiple recodings in one go, or a function that takes a
-					value and returns the recoded value.
+		arguments:
+			key:
+				desc:	The name of the variable to recode, or a list of names
+						to recode multiple variables in one go.
+				type:	[str, unicode, list]
+			coding:
+				desc:	An (oldValue, newValue) tuple, a list of tuples to
+						handle multiple recodings in one go, or a function that
+						takes a value and returns the recoded value.
+				type:	[tuple, list, function]
 		"""
 
 		if type(key) == list:
@@ -553,13 +630,16 @@ class DataMatrix(BaseMatrix):
 	def removeNan(self, key):
 
 		"""
-		Remove all rows where the specified key is nan.
+		desc:
+			Remove all rows where the specified key is nan.
 
-		Arguments:
-		key		--	A key that should not have any nan values.
+		arguments:
+			key:
+				desc:	A key that should not have any nan values.
+				type:	[str, unicode]
 
-		Returns:
-		A DataMatrix.
+		returns:
+			type:	DataMatrix
 		"""
 
 		i = np.where(~np.isnan(self.m[key]))[0]
@@ -567,40 +647,51 @@ class DataMatrix(BaseMatrix):
 		dm = DataMatrix(self.m[i], structured=True)
 		return dm
 
-	def removeField(self, vName):
+	def removeField(self, key):
 
 		"""
-		Return a DataMatrix that is a copy of the current DataMatrix without the
-		specified field.
+		desc:
+			Return a DataMatrix that is a copy of the current DataMatrix without
+			the specified field.
 
-		Arguments:
-		vName	--	The name of the field to be removed.
+		arguments:
+			key:
+				desc:	The name of the field to be removed.
+				type:	[str, unicode]
 
-		Returns:
-		A DataMatrix
+		returns:
+			type:	DataMatrix
 		"""
 
 		newDtype = []
 		for i in range(len(self.m.dtype)):
-			_vName = self.m.dtype.names[i]
+			_key = self.m.dtype.names[i]
 			_dtype = self.m.dtype[i]
-			if _vName != vName:
-				newDtype.append( (_vName, _dtype) )
+			if _key != key:
+				newDtype.append( (_key, _dtype) )
 		a = np.zeros(self.m.shape, dtype=newDtype)
 		for name in self.m.dtype.names:
-			if name != vName:
+			if name != key:
 				a[name] = self.m[name]
 		return DataMatrix(a, structured=True)
 
 	def rename(self, oldKey, newKey):
 
 		"""
-		Renames a column. This function operates in place, so it modifies the
-		current dataMatrix.
+		desc:
+			Renames a column. This function operates in place, so it modifies
+			the current dataMatrix.
 
-		Arguments:
-		oldKey	--	The old name of the column
-		newKey	--	The new name of the column
+		arguments:
+			oldKey:
+				desc:	The old name.
+				type:	[str, unicode]
+			newKey:
+				desc:	The new name.
+				type:	[str, unicode]
+
+		returns:
+			type:	DataMatrix
 		"""
 
 		dtype = []
@@ -615,18 +706,23 @@ class DataMatrix(BaseMatrix):
 	def group(self, keys, _sort=True):
 
 		"""
-		Split the data into different groups based on unique values for the
-		key variables.
+		desc:
+			Split the data into different groups based on unique values for the
+			key variables.
 
-		Arguments:
-		keys -- a list of variable names, or a single variable name
+		arguments:
+			keys:
+				desc:	A key or list of keys to split the data on.
+				type:	[str, unicode, list]
 
-		Keyword arguments:
-		_sort -- indicates whether the groups should be sorted by values
-				 (default=True)
+		keywords:
+			"_sort":
+				desc:	Indicates whether the groups should be sorted by values.
+				type:	bool
 
-		Returns:
-		A list of DataMatrices
+		returns:
+			desc:	A list of DataMatrices.
+			type:	list
 		"""
 
 		if type(keys) == str:
@@ -647,16 +743,21 @@ class DataMatrix(BaseMatrix):
 	def select(self, query, verbose=True):
 
 		"""
-		Select a subset of the data
+		desc:
+			Select a subset of the data.
 
-		Arguments:
-		query -- a query, e.g. 'rt > 1000'
+		arguments:
+			query:
+				desc:	A query, e.g. 'rt > 1000'.
+				type:	[str, unicode]
 
-		Keyword arguments:
-		verbose -- indicates if a summary should be printed (default=True)
+		keywords:
+			verbose:
+				desc:	Indicates if a summary should be printed.
+				type:	bool
 
-		Returns:
-		A DataMatrix
+		returns:
+			type:	DataMatrix
 		"""
 
 		if len(self) == 0:
@@ -691,13 +792,16 @@ class DataMatrix(BaseMatrix):
 	def selectColumns(self, keys):
 
 		"""
-		Creates a new DataMatrix with only the specified columns.
+		desc:
+			Creates a new DataMatrix with only the specified columns.
 
-		Arguments:
-		key		--	A column or list of columns to select.
+		arguments:
+			keys:
+				desc:	A column or list of columns to select.
+				type:	[list, str, unicode]
 
-		Returns:
-		A new DataMatrix.
+		returns:
+			type:	DataMatrix
 		"""
 
 		if isinstance(keys, basestring):
@@ -710,20 +814,29 @@ class DataMatrix(BaseMatrix):
 	def selectByStdDev(self, keys, dv, thr=2.5, verbose=False):
 
 		"""
-		Select only those rows where the value of a given column is within a
-		certain distance from the mean
+		desc:
+			Select only those rows where the value of a given column is within a
+			certain distance from the mean.
 
-		Arguments:
-		keys -- a list of column names
-		dv -- the dependent variable
+		arguments:
+			keys:
+				desc:	A list of keys to create groups for which the
+						deviation is calculated seperately.
+				type:	list
+			dv:
+				desc:	The dependent variable.
+				type:	[str, unicode]
 
-		Keyword arguments:
-		thr -- the stddev threshold (default=2.5)
-		verbose -- indicates whether detailed output should be provided
-				   (default=False)
+		keywords:
+			thr:
+				desc:	The stddev threshold.
+				type:	[float, int]
+			verbose:
+				desc:	Indicates whether detailed output should be provided.
+				type:	bool
 
-		Returns:
-		A selection of the current DataMatrix
+		returns:
+			type:	DataMatrix
 		"""
 		if verbose:
 			print '======================================='
@@ -772,7 +885,10 @@ class DataMatrix(BaseMatrix):
 
 	def shuffle(self):
 
-		"""Shuffles the datamatrix in place"""
+		"""
+		desc:
+			Shuffles the DataMatrix in place.
+		"""
 
 		# Directly shuffling the array does not preserve all items! This seems
 		# to be a bug in numpy. This workaround preserves the integrity of the
@@ -784,44 +900,42 @@ class DataMatrix(BaseMatrix):
 	def sort(self, keys, ascending=True):
 
 		"""
-		Sorts the matrix
+		desc:
+			Sorts the DataMatrix in place.
 
-		Arguments:
-		keys 		-- 	a list of keys to use for sorting. The first key is
-						dominant, the second key is next-to-dominant, etc. A
-						single string can also be specified.
+		arguments:
+			keys:
+				desc:	A key or list of keys to use for sorting. The first key
+						is dominant, the second key is next-to-dominant, etc.
+				type:	[str, unicode, list]
 
-		Keyword arguments:
-		ascending	--	indicates whether the sorting should occur in ascending
-						(True) or descending (False) order
+		keywords:
+			ascending:
+				desc:	Indicates whether the sorting should occur in ascending
+						(True) or descending (False) order.
+				type:	bool
 		"""
 
 		self.m.sort(order=keys)
 		if not ascending:
 			self.m = self.m[::-1]
 
-	def split(self, col):
+	def split(self, key):
 
 		"""
-		Splits the DataMatrix in chunks such that each chunk only has the same
-		value for the specified column. For splitting a DataMatrix into
-		equally sized parts, see `DataMatrix.explode()`.
+		desc:
+			Splits the DataMatrix in chunks such that each chunk only has the
+			same value for the specified column. For splitting a DataMatrix into
+			equally sized parts, see [DataMatrix.explode].
 
-		For example (column b shown as row for convenience):
+		arguments:
+			key:
+				desc:	A key to split by.
+				type:	[str, unicode]
 
-		b 0 0 1 1 2
-
-		Would be split into:
-
-		b 0 0
-		b 1 1
-		b 2
-
-		Arguments:
-		col		--	The column name.
-
-		Returns:
-		A list of DataMatrices.
+		returns:
+			desc:	A list of DataMatrices.
+			type:	list
 		"""
 
 		l = []
@@ -841,22 +955,30 @@ class DataMatrix(BaseMatrix):
 	def ttest(self, keys, dv, paired=True, collapse=None):
 
 		"""
-		Performs t-tests between groups defined by a list of keys.
+		desc:
+			Performs t-tests between groups defined by a list of keys.
 
-		Arguments:
-		keys		--	A list of keys to define the groups.
-		dv			--	The dependent variable.
+		arguments:
+			keys:
+				desc:	A list of keys to define the groups.
+				type:	list
+			dv:
+				desc:	The dependent variable.
+				type:	[str, unicode]
 
-		Keyword arguments:
-		paired		--	Determines whether a paired-samples t-test or an
+		keywords:
+			paired:
+				desc:	Determines whether a paired-samples t-test or an
 						independent samples t-test should be conducted.
-						(default=True)
+				type:	bool
+			collapse:
+				desc:	A key to collapse the data on, so that you can do
+						t-tests on (subject) means.
+				type:	[str, unicode, NoneType]
 
-		collapse	--	A key to collapse the data on, so that you can do
-						t-tests on (subject) means. (default=None)
-
-		Returns:
-		A list of (desc, t, p) tuples
+		returns:
+			desc:	A list of (desc, t, p) tuples.
+			type:	list
 		"""
 
 		from itertools import combinations
@@ -901,16 +1023,20 @@ class DataMatrix(BaseMatrix):
 
 		return DataMatrix(np.array(_l))
 
-	def unique(self, dv):
+	def unique(self, key):
 
 		"""
-		Gives all unique values for a particular variable
+		desc:
+			Gives all unique values for a particular key.
 
-		Arguments:
-		dv -- the dependent variable
+		arguments:
+			key:
+				desc:	A column name.
+				type:	[str, unicode]
 
-		Returns:
-		An array of unique values for dv
+		returns:
+			desc:	A list of unique values.
+			type:	list
 		"""
 
 		return list(np.unique(self[dv]))
@@ -918,13 +1044,17 @@ class DataMatrix(BaseMatrix):
 	def where(self, query):
 
 		"""
-		Return indices corresponding to the query.
+		desc:
+			Return indices corresponding to the query.
 
-		Arguments:
-		query -- a query, e.g. 'rt > 1000'
+		arguments:
+			query:
+				desc:	A query, e.g. 'rt > 1000'.
+				type:	[str, unicode]
 
-		Returns:
-		A list of indices
+		returns:
+			desc:	Indices.
+			type:	ndarray
 		"""
 
 		l = query.split(' ')
@@ -937,19 +1067,34 @@ class DataMatrix(BaseMatrix):
 	def withinize(self, vName, targetVName, key, verbose=True, whiten=False):
 
 		"""
-		Removes the between factor variance for a given key (such as subject or
-		file) for a given dependent variable.
+		desc:
+			Removes the between factor variance for a given key (such as subject
+			or file) for a given dependent variable. This operation acts in
+			place.
 
-		Arguments:
-		vName -- the dependent variable to withinize
-		targetVName -- the target variable
-		key -- the key that defines the within group
+		arguments:
+			vName:
+				desc:	The dependent variable to withinize.
+				type:	[str, unicode]
+			targetVName:
+				desc:	The target variable to store withinized values. This
+						variable should exist.
+				type:	[str, unicode]
+			key:
+				desc:	The key that defines the group.
+				type:	[str, unicode]
 
-		Keyword arguments:
-		verbose -- indicates whether the results should be printed (default=
-				   True)
-		whiten -- indicates whether the data should be whitened so that the
-				  standard deviation is 1 and the mean 0 (default=False)
+		keywords:
+			verbose:
+				desc:	Indicates whether the results should be printed.
+				type:	bool
+			whiten:
+				desc:	Indicates whether the data should be whitened so that
+						the standard deviation is 1 and the mean 0.
+				type:	bool
+
+		returns:
+			type:	DataMatrix
 		"""
 		
 
