@@ -512,7 +512,7 @@ class DataMatrix(BaseMatrix):
 			type:	int
 		"""
 
-		return len(self.unique(dv))
+		return len(self.unique(key))
 
 	def explode(self, N):
 
@@ -1039,7 +1039,7 @@ class DataMatrix(BaseMatrix):
 			type:	list
 		"""
 
-		return list(np.unique(self[dv]))
+		return list(np.unique(self[key]))
 
 	def where(self, query):
 
