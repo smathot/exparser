@@ -95,6 +95,8 @@ class EyelinkAscFolderReader(BaseReader):
 		self.skipList = skipList
 		self.blinkReconstruct = blinkReconstruct
 		self.acceptNonMatchingColumns = acceptNonMatchingColumns
+		self.traceImg = '--traceimg' in sys.argv
+		self.tracePlot = '--traceplot' in sys.argv
 
 		print '\nScanning \'%s\'' % path
 		self.dm = None
@@ -228,13 +230,15 @@ class EyelinkAscFolderReader(BaseReader):
 
 		nPhase = len(self.traceDict)
 		i = 1
-		if '--traceplot' in sys.argv or '--traceimg' in sys.argv:
+		if self.traceImg or self.tracePlot:
 			plt.clf()
 			plt.close()
 			plt.figure(figsize=(12,12))
 			plt.subplots_adjust(hspace=.5, wspace=.5)
 		for phase, trace in self.traceDict.iteritems():
 			a = np.array(trace, dtype=float)
+			if len(a) == 0:
+				continue
 			origA = a.copy()
 			if self.blinkReconstruct:
 				a[:,2] = TraceKit.blinkReconstruct(a[:,2])
@@ -251,7 +255,7 @@ class EyelinkAscFolderReader(BaseReader):
 
 			np.save(path, a)
 			trialDict['__trace_%s__' % phase] = path
-			if '--traceplot' in sys.argv or '--traceimg' in sys.argv:
+			if self.traceImg or self.tracePlot:
 				plt.subplot(nPhase, 3, i)
 				i += 1
 				plt.title('X(%s)' % phase)
@@ -270,9 +274,9 @@ class EyelinkAscFolderReader(BaseReader):
 				plt.plot(a[:,2])
 				if self.traceSmoothParams != None or self.blinkReconstruct:
 					plt.plot(origA[:,2])
-		if '--traceplot' in sys.argv or '--traceimg' in sys.argv:
+		if self.traceImg or self.tracePlot:
 			plt.suptitle(path)
-			if '--traceimg' in sys.argv:
+			if self.traceImg:
 				path = os.path.join(self.traceFolder, 'png', '%s-%.5d-%s.png' \
 					% (trialDict['file'], trialDict['trialId'], phase))
 				if not os.path.exists(os.path.join(self.traceFolder, 'png')):
@@ -281,7 +285,7 @@ class EyelinkAscFolderReader(BaseReader):
 				if not os.path.exists(os.path.join(self.traceFolder, 'png')):
 					os.makedirs(os.path.join(self.traceFolder, 'png'))
 				plt.savefig(path)
-			if '--traceplot' in sys.argv:
+			if self.tracePlot:
 				plt.show()
 
 	def __initTrial__(self, trialDict):

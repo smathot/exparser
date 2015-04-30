@@ -740,6 +740,18 @@ class DataMatrix(BaseMatrix):
 			l += dm.group(keys[1:])
 		return l
 
+	def walk(self, key):
+
+		l = []
+		for val in self.unique(key):
+			try:
+				float(val)
+				_dm = self.select('%s == %s' % (key, val))
+			except:
+				_dm = self.select('%s == "%s"' % (key, val))
+			l.append((val, _dm))
+		return l
+
 	def select(self, query, verbose=True):
 
 		"""
@@ -1096,7 +1108,7 @@ class DataMatrix(BaseMatrix):
 		returns:
 			type:	DataMatrix
 		"""
-		
+
 
 		self.m[targetVName] = self.m[vName]
 		gAvg = self.m[targetVName].mean()

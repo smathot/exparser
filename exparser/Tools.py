@@ -19,7 +19,7 @@ along with exparser.  If not, see <http://www.gnu.org/licenses/>.
 
 import sys
 from exparser.DataMatrix import DataMatrix
-from exparser import Cache
+from exparser import Cache, GUI
 import time
 import warnings
 
@@ -46,7 +46,7 @@ def callFunc(dm, mods, func, cachePrefix='autoCache.', redo=False):
 	if func[0] == '@':
 		func = func[1:]
 	found = False
-	for mod in mods:
+	for mod in mods + [GUI]:
 		if hasattr(mod, func):
 			t1 = time.time()
 			_func = getattr(mod, func)

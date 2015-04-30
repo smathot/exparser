@@ -22,22 +22,35 @@ import os
 import os.path
 import numpy as np
 import csv
+import warnings
 
 class CsvFolderReader(BaseReader):
 
-	def __init__(self, path='data', ext='.csv', delimiter=',', quote='"', \
+	def __init__(self, path='data', ext='.csv', delimiter=',', quote='"',
 		maxN=None):
 
 		"""
-		Constructor. Reads all csv files from a specific folder.
+		desc:
+			Constructor. Reads all csv files from a specific folder.
 
-		Keyword arguments:
-		path	--	The folder containing the csv files. (default='data')
-		ext		--	The extension of the csv files, or None to parse all files.
-					(default='.csv')
-		quote	--	The character used for quoting columns. (default=None)
-		maxN	--	The maximum number of files to process, or None to process
-					all. (default=None)
+		keywords:
+			path:
+				desc:	The folder containing the csv files.
+				type:	[str, unicode]
+			ext:
+				desc:	The extension of the csv files, or None to parse all
+						files.
+				type:	[str, unicode, NoneType]
+			delimiter:
+				desc:	The column delimiter.
+				type:	[str, unicode]
+			quote:
+				desc:	The character used for quoting columns.
+				type:	[str, unicode, NoneType]				
+			maxN:
+				desc:	The maximum number of files to process, or `None` to
+						process all.
+				type:	[int, NoneType]
 		"""
 
 		print 'Scanning \'%s\'' % path
@@ -48,8 +61,12 @@ class CsvFolderReader(BaseReader):
 		for fname in l:
 			if ext == None or os.path.splitext(fname)[1] == ext:
 				print 'Reading %s ...' % fname,
-				cr = CsvReader(os.path.join(path, fname), delimiter=delimiter, \
-					quote=quote)
+				try:
+					cr = CsvReader(os.path.join(path, fname),
+						delimiter=delimiter, quote=quote)
+				except:
+					warnings.warn('Failed to read %s' % fname)
+					continue
 				dm = cr.dataMatrix()
 				while '__src__' not in dm.columns():
 					try:
@@ -69,9 +86,8 @@ class CsvFolderReader(BaseReader):
 	def dataMatrix(self):
 
 		"""
-		Returns:
-		A DataMatrix
+		returns:
+			type:	DataMatrix
 		"""
 
 		return self.dm
-		#return DataMatrix(self.m)

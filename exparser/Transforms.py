@@ -17,6 +17,7 @@ along with exparser.  If not, see <http://www.gnu.org/licenses/>.
 
 import numpy as np
 from scipy.stats import nanmean
+from exparser.DataMatrix import DataMatrix
 
 def cowansK(dm):
 
@@ -62,17 +63,25 @@ def dPrime(dm):
 def invMean(dm, key='response_time'):
 
 	"""
-	Calculates the inverse of the mean of the inverse of the values of a given
-	column. This is useful as a way to get a mean that is robust to outliers.
+	desc:
+		Calculates the inverse of the mean of the inverse of the values of a
+		given column. This is useful as a way to get a mean that is robust to
+		outliers.
 
-	Arguments:
-	dm		--	A DataMatrix.
+	arguments:
+		dm:		A DataMatrix or Numpy array.
 
-	Keyword arguments:
-	key		--	The variable to use. (default='response_time')
+	keywords:
+		key:	The column name to use, in case dm is a DataMatrix.
+
+	returns:	The inverse of the mean inverse.
 	"""
 
-	return 1./np.mean(1./dm[key])
+	if isinstance(dm, DataMatrix):
+		a = dm[key]
+	else:
+		a = dm
+	return 1./np.mean(1./a)
 
 def rtAdjust(dm, rtVar='response_time', correctVar='correct'):
 

@@ -27,43 +27,82 @@ import numpy as np
 from exparser.TangoPalette import *
 from exparser.RBridge import RBridge
 from exparser.Cache import cachedArray, cachedDataMatrix
+from exparser.DataMatrix import DataMatrix
 
 def getTrace(dm, signal=None, phase=None, traceLen=None, offset=0,
-	lock='start', traceTemplate='__trace_%s__', baseline=None,
-	baselineLen=100, baselineOffset=0, baselineLock='end', smoothParams=None,
-	nanPad=True, **dummy):
+	lock='start', traceTemplate='__trace_%s__', baseline=None, baselineLen=100,
+	baselineOffset=0, baselineLock='end', smoothParams=None, nanPad=True,
+	transform=None, deriv=0, regress=None, **dummy):
 
 	"""
-	Gets a trace for a single trial
+	desc:
+		Gets a trace for a single trial.
 
-	Arguments:
-	dm	--	a DataMatrix with only a single trial (if more trials are in there,
-			only the first will be used)
+	arguments:
+		dm:
+			desc:	A DataMatrix with only a single trial (if more trials are in
+					there, only the first will be used).
+			type:	DataMatrix
 
-	Keyword arguments:
-	signal			--	'x', 'y', or 'pupil' (default=None)
-	phase			--	the name of the phase (default=None)
-	traceLen		--	the length of the trace to plot (default=None)
-	offset			--	the first (if lock == start) or last (if lock == end)
-						samples to skip (default=0)
-	lock			--	indicates whether the trace should be locked from the
-						phase start or end (default='start')
-	traceTemplate	--	is used to determine the correct key from the DataMatrix
-						based on the phase (default='__trace_%s__')
-	baseline		--	the phase to use for the baseline (default=None)
-	baselineLen		--	the length of the baseline (default=100)
-	baselineOffset	--	the first (if lock == start) or last (if lock == end)
-						baseline samples to skip (default=0)
-	baselineLock	--	indicates whether the baseline should be locked from the
-						phase start or end (default='end')
-	smoothParams	--	a {'windowLen' : [..], 'windowType' : [..]} dictionary
-						that is used to specify signal smoothing (see smooth()),
-						or None for no smoothing. (default=None)
-	nanPad			--	If set to True, traces that are shorter than traceLen
-						are padded with np.nan values.
+	keywords:
+		signal:
+			desc:	'x', 'y', or 'pupil'.
+			type:	[str, unicode, NoneType]
+		phase:
+			desc:	The name of the phase.
+			type:	[str, unicode]
+		traceLen:
+			desc:	The length of the trace to plot.
+			type:	int
+		offset:
+			desc:	The first (if lock == start) or last (if lock == end)
+					samples to skip.
+			type:	int
+		lock:
+			desc:	Indicates whether the trace should be locked from the
+					phase start or end.
+			type:	[str, unicode]
+		traceTemplate:
+			desc:	Used to map a phase name onto a DataMatrix key.
+			type:	[str, unicode]
+		baseline:
+			desc:	The phase to use for the baseline.
+			type:	[str, unicode, NoneType]
+		baselineLen:
+			desc:	The length of the baseline.
+			type:	int
+		baselineOffset:
+			desc:	The first (if lock == start) or last (if lock == end)
+					baseline samples to skip.
+			type:	int
+		baselineLock:
+			desc:	Indicates whether the baseline should be locked from the
+					phase start or end.
+			type:	[str, unicode]
+		smoothParams:
+			desc:	A {'windowLen' : [..], 'windowType' : [..]} dictionary
+					that is used to specify signal smoothing (see smooth()),
+					or `None` for no smoothing.
+			type:	[dict, NoneType]
+		nanPad:
+			desc:	If set to True, traces that are shorter than traceLen
+					are padded with np.nan values.
+			type:	bool
+		transform:
+			desc:	A function to transform the trace value.
+			type:	[NoneType, function]
+		deriv:
+			desc:	Indicates the derivative that should be used. The 1st
+					derivative corresponds to velocity, the 2nd to acceleration.
+			type:	int
+		regress:
+			desc:	A function that regresses the X and Y coordinate out of
+					pupil size.
+			type:	FunctionType
 
-	Returns:
-	a 1D NumPy array with the trace
+	returns:
+		desc:	A 1D NumPy array with the trace.
+		type:	ndarray
 	"""
 
 	if len(dm) != 1:
@@ -87,7 +126,18 @@ def getTrace(dm, signal=None, phase=None, traceLen=None, offset=0,
 	if not os.path.exists(npy):
 		raise Exception('Missing .npy trace file: %s (path="%s")' \
 			% (traceTemplate % phase, npy))
-	_aTrace = np.load(npy)[:,i]
+	aFull = np.load(npy)
+	if regress != None:
+		_aTrace = regress(aFull, dm)
+	else:
+		_aTrace = aFull[:,i]
+	if smoothParams != None:
+		try:
+			_aTrace = smooth(_aTrace, **smoothParams)
+		except:
+			warnings.warn('Failed to smooth trace of length %d' % len(_aTrace))
+	if deriv > 0:
+		_aTrace = traceDeriv(_aTrace, deriv)
 	if lock == 'start':
 		_aTrace = _aTrace[offset:offset+traceLen]
 	elif offset > 0:
@@ -106,6 +156,9 @@ def getTrace(dm, signal=None, phase=None, traceLen=None, offset=0,
 			aTrace[-len(_aTrace):] = _aTrace
 	else:
 		aTrace = _aTrace
+	# Optionally apply a transform
+	if transform != None:
+		aTrace = transform(aTrace)
 	# If we don't apply a baseline then return right away, possible after
 	# smoothing
 	if baseline == None:
@@ -117,17 +170,25 @@ def getTrace(dm, signal=None, phase=None, traceLen=None, offset=0,
 	if not os.path.exists(npy):
 		raise Exception('Missing .npy trace file: %s (path="%s")' \
 			% (traceTemplate % baseline, npy))
-	aBaseline = np.load(npy)[:,i]
+	aFull = np.load(npy)
+	if regress != None:
+		aBaseline = regress(aFull, dm)
+	else:
+		aBaseline = aFull[:,i]
+	if smoothParams != None:
+		aBaseline = smooth(aBaseline, **smoothParams)
+	if deriv > 0:
+		aBaseline = traceDeriv(aBaseline, deriv)
 	if baselineLock == 'start':
 		aBaseline = aBaseline[baselineOffset:baselineOffset+baselineLen]
 	elif baselineOffset == 0:
 		aBaseline = aBaseline[-baselineLen:]
 	else:
 		aBaseline = aBaseline[-baselineOffset-baselineLen:-baselineOffset]
+	if transform != None:
+		aBaseline = transform(aBaseline)
 	mBaseline = aBaseline.mean()
 	aTrace /= mBaseline
-	if smoothParams != None:
-		aTrace = smooth(aTrace, **smoothParams)
 	return aTrace
 
 def getTraceAvg(dm, avgFunc=nanmean, **traceParams):
@@ -161,6 +222,47 @@ def getTraceAvg(dm, avgFunc=nanmean, **traceParams):
 	errData = nanstd(mTrace, axis=0) / np.sqrt(mTrace.shape[0])
 	errData = np.array( [errData, errData] )
 	return xData, yData, errData
+
+
+def getTracePeak(dm, peakFunc=np.nanmax, **traceParams):
+
+	a = getTrace(dm, **traceParams)
+	i = np.where(a == peakFunc(a))
+	xPeak = i[0][0]
+	yPeak = a[xPeak]
+	return xPeak, yPeak
+
+def getTracePeakAvg(dm, **traceParams):
+
+	"""
+	desc:
+		Gets the average peak value from.
+
+	arguments:
+		dm:
+			desc:	A DataMatrix.
+			type:	DataMatrix
+
+	keyword-dict:
+		*traceParams:	See getTrace()
+
+	Returns:
+		An (xPeak, yPeak, xErr, yErr) tuple, where xErr and yErr contain the
+		standard error.
+	"""
+
+	traceLen = traceParams['traceLen']
+	mTrace = np.empty( (len(dm), traceLen) )
+	mTrace[:] = np.nan
+	i = 0
+	aXPeak = np.empty(len(dm))
+	aYPeak = np.empty(len(dm))
+	for i, trialDm in enumerate(dm):
+		xPeak, yPeak = getTracePeak(trialDm, **traceParams)
+		aXPeak[i] = xPeak
+		aYPeak[i] = yPeak
+	return aXPeak.mean(), aYPeak.mean(), np.std(aXPeak)/np.sqrt(len(aXPeak)), \
+		np.std(aYPeak)/np.sqrt(len(aYPeak))
 
 def plotTraceAvg(ax, dm, avgFunc=nanmean, lineColor=blue[0], lineStyle='-',
 	errColor=gray[1], errAlpha=.4, label=None, _downSample=None, aErr=None,
@@ -208,67 +310,87 @@ def plotTraceAvg(ax, dm, avgFunc=nanmean, lineColor=blue[0], lineStyle='-',
 			ax.fill_betweenx(xData, yData-errData[0], yData+errData[1],
 				color=errColor, alpha=errAlpha)
 
-def plotTraceContrast(dm, select1, select2, color1=blue[1], color2=orange[1], \
-	colorDiff=green[1], label1=None, label2=None, labelDiff=None, errAlpha= \
-	.25, model=None, showAbs=True, showDiff=False, **params):
+def plotTraceContrast(dm, select1, select2, color1=blue[1], color2=orange[1],
+	colorDiff=green[1], label1=None, label2=None, labelDiff=None,
+	errAlpha=.25, model=None, showAbs=True, showDiff=False, **params):
 
 	"""
-	Creates a trace-contrast plot, with two lines and error shadings.
+	desc: |
+		Creates a trace-contrast plot, with two lines and error shadings.
 
-	NOTE: Passing the `cacheId` keyword will cause the lmer statistics to be
-	cached.
+		NOTE: Passing the `cacheId` keyword will cause the lmer statistics to be
+		cached.
 
-	Arguments:
-	dm				--	A DataMatrix.
-	select1			--	A select statement for the first trace.
-	select2			--	A select statement for the second trace.
+	arguments:
+		dm:
+			desc:	A DataMatrix.
+			type:	DataMatrix
+		select1:
+			desc:	A select statement for the first trace.
+			type:	[str, unicode]
+		select2:
+			desc:	A select statement for the second trace.
+			type:	[str, unicode]
 
-	Keyword arguments:
-	color1			--	A color for the first trace. (default=blue[1])
-	color2			--	A color for the second trace. (default=orange[1])
-	colorDiff		--	A color for the difference trace. (default=green[1])
-	label1			--	A label for the first trace. (default=None)
-	label2			--	A label for the second trace. (default=None)
-	labelDiff		--	A label for the difference trace. (default=None)
-	errAlpha		--	Alpha level for the error bars. (default=.25)
-	model			--	A statistical model to be passed onto
-						`mixedModelTrace()` or None to skip statistics.
-						(default=None)
-	showAbs			--	Indicates whether the absolute traces (i.e. traces 1 and
-						2) should be shown. (default=True)
-	showDiff		--	Indicates whether the absolute traces (i.e. trace 1
-						minus trace 2) should be shown. (default=False)
+	keywords:
+		color1:
+			desc:	A color for the first trace.
+			type:	[str, unicode]
+		color2:
+			desc:	A color for the second trace.
+			type:	[str, unicode]
+		colorDiff:
+			desc:	A color for the difference trace.
+			type:	[str, unicode]
+		label1:
+			desc:	A label for the first trace.
+			type:	[str, unicode, NoneType]
+		label2:
+			desc:	A label for the second trace.
+			type:	[str, unicode, NoneType]
+		labelDiff:
+			desc:	A label for the difference trace.
+			type:	[str, unicode, NoneType]
+		errAlpha:
+			desc:	Opacity level for the error bars.
+			type:	[float, int]
+		model:
+			desc:	A statistical model to be passed onto `mixedModelTrace()` or
+					`None` to skip statistics.
+			type:	[str, unicode, NoneType]
+		showAbs:
+			desc:	Indicates whether the absolute traces (i.e. traces 1 and 2)
+					should be shown.
+			type:	bool
+		showDiff:
+			desc:	Indicates whether the difference trace should be shown.
+			type:	bool
 	"""
 
-	dm1 = dm.select(select1)
-	dm2 = dm.select(select2)
 	x1, y1, err1 = getTraceAvg(dm.select(select1, verbose=False), **params)
 	x2, y2, err2 = getTraceAvg(dm.select(select2, verbose=False), **params)
 	y3 = y2-y1
 	if model != None:
-		aErr = mixedModelTrace(dm, model=model, **params)
-		d = y2-y1
-		aP = aErr[:,0]
-		aLo = aErr[:,1]
-		aHi = aErr[:,2]
-		minErr = (d-aLo)/2
-		maxErr = (aHi-d)/2
-		y1min = y1 - minErr
-		y1max = y1 + maxErr
-		y2min = y2 - minErr
-		y2max = y2 + maxErr
-		y3min = y3 - minErr
-		y3max = y3 + maxErr
+		ldm = mixedModelTrace(dm, model=model, **params)
+		ldm = ldm.select('effect == "%s"' % ldm['effect'][1])
+		aSe = ldm['se']
+		aT = ldm['t']
+		y1min = y1 - aSe/2
+		y1max = y1 + aSe/2
+		y2min = y2 - aSe/2
+		y2max = y2 + aSe/2
+		y3min = y3 - aSe
+		y3max = y3 + aSe
 		if showAbs:
 			plt.fill_between(x1, y1min, y1max, color=color1, alpha=errAlpha)
 			plt.fill_between(x2, y2min, y2max, color=color2, alpha=errAlpha)
 		if showDiff:
 			plt.fill_between(x1, y3min, y3max, color=colorDiff, alpha=errAlpha)
-		markStats(plt.gca(), aP)
+		markStats(plt.gca(), aT, **params)
 	if showAbs:
 		plt.plot(x1, y1, color=color1, label=label1)
 		plt.plot(x2, y2, color=color2, label=label2)
-	elif showDiff:
+	if showDiff:
 		plt.plot(x1, y3, color=colorDiff, label=labelDiff)
 
 def traceDiff(dm, select1, select2, epoch=None, **traceParams):
@@ -306,38 +428,44 @@ def traceDiff(dm, select1, select2, epoch=None, **traceParams):
 		raise Exception('Epoch should be None, int, or (int, int)')
 	return d.mean()
 
-@cachedArray
-def mixedModelTrace(dm, model, winSize=1, pvals=None, nSim=1000, effectIndex=1,
-	**traceParams):
+@cachedDataMatrix
+def mixedModelTrace(dm, model, winSize=1, effectIndex=1, **traceParams):
 
 	"""
-	Perform a mixed model over a single trace. The dependent variable is
-	specifed through the signal and phase keywords.
+	desc:
+		Perform a mixed model over a single trace. The dependent variable is
+		specifed through the signal and phase keywords.
 
-	Arguments:
-	dm				--	A DataMatrix.
-	model			-- 	An lmer-style model. This needs to be only the fixed and
-						random effects part of the model, so everything after
-						the `~` sign. For example `cond + (1|subject_nr)`.
+	arguments:
+		dm:
+			desc:	A DataMatrix.
+			type:	DataMatrix
+		model:
+			desc:	An lmer-style model. This needs to be only the fixed and
+					random effects part of the model, so everything after
+					the `~` sign. For example `cond + (1|subject_nr)`.
+			type:	str
 
-	Keyword arguments:
-	winSize			--	indicates the number of samples that should be skipped
-						each time. For a real analysis, this should be 1, but
-						for a quick look, it can be increased (default=1)
-	nSim			--	the number of similuations. This should be increased
-						for more accurate estimations (default=100)
-	effectIndex		--	The row-index of the relevant effect in the lmer
-						output. (default=1)
-	pvals			--	DEPRECATED
-	*traceParams	--	see getTrace()
+	keywords:
+		winSize:
+			desc:	Indicates the number of samples that should be skipped
+					each time. For a real analysis, this should be 1, but
+					for a quick look, it can be increased (default=1)
+			type:	int
 
-	Returns:
-	A (traceLen, 3) array, where the columns are [t-value, error high,
-	error low].
+	keyword-dict:
+		*traceParams:	See getTrace().
+
+	returns: |
+		A DataMatrix with nr-of-effects*nr-of-samples rows and the following
+		columns:
+
+		- `i`: sample number
+		- `effect`: name of effect
+		- `est`: estimated effect (slope/ intercept)
+		- `se`: standard error of effect
+		- `t`: t-value of effect
 	"""
-
-	if pvals != None:
-		warnings.warn('pvals has been deprecated')
 
 	if not model.startswith('mmdv__ ~ '):
 		model = 'mmdv__ ~ ' + model
@@ -347,7 +475,7 @@ def mixedModelTrace(dm, model, winSize=1, pvals=None, nSim=1000, effectIndex=1,
 	except:
 		R = RBridge()
 	traceLen = traceParams['traceLen']
-	aTVal = np.zeros( (traceLen, 3) )
+	l = [ ['i', 'effect', 'est', 'se', 't'] ]
 	for i in range(0, traceLen, winSize):
 		# First calculate the mean value for the current signal slice for each
 		# trial and save that in a copy of the DataMatrix
@@ -362,19 +490,29 @@ def mixedModelTrace(dm, model, winSize=1, pvals=None, nSim=1000, effectIndex=1,
 		# Do mixed effects
 		R.load(_dm)
 		_dm = R.lmer(model)
-		print _dm
-		tVal = _dm['t'][effectIndex]
-		errHigh = _dm['est'][effectIndex] + _dm['se'][effectIndex]
-		errLow = _dm['est'][effectIndex] - _dm['se'][effectIndex]
-		aTVal[i:i+winSize, 0] = tVal
-		aTVal[i:i+winSize, 1] = errHigh
-		aTVal[i:i+winSize, 2] = errLow
-		print '%.4d: t = %.3f (%f - %f)' % (i, tVal, errHigh, errLow)
-		print
-	return aTVal
+		_dm._print(sign=4, title='%d - %d' % (i, i+winSize))
+		for k in range(winSize):
+			if i+k >= traceLen:
+				break
+			for j in _dm.range():
+					l.append([i+k, _dm['effect'][j], _dm['est'][j], _dm['se'][j],
+						_dm['t'][j]])
+	return DataMatrix(l)
 
-def markStats(ax, aStat, below=True, thr=.05, minSmp=200, color=gray[1],
-	alpha=.2, loExt=False, hiExt=False, showSpurious=False):
+def statsTrace(dm, key='t', intercept=False):
+
+	colors = brightColors[:]
+	for effect in dm.unique('effect'):
+		if not intercept and effect == '(Intercept)':
+			continue
+		_dm = dm.select('effect == "%s"' % effect)
+		plt.plot(_dm['t'], label=effect, color=colors.pop())
+	plt.legend(frameon=False)
+	plt.show()
+
+def markStats(ax, aStat, below=False, _abs=True, thr=2., minSmp=200,
+	color=gray[1], alpha=.2, loExt=False, hiExt=False, showSpurious=False,
+	**args):
 
 	"""
 	Marks all timepoints in a figure with colored shading when the significance
@@ -408,6 +546,8 @@ def markStats(ax, aStat, below=True, thr=.05, minSmp=200, color=gray[1],
 	iFrom = None
 	aSign = np.zeros(len(aStat))
 	aSpurious = np.zeros(len(aStat))
+	if _abs:
+		aStat = np.abs(aStat)
 	for i in range(len(aStat)):
 		pVal = aStat[i]
 		hit = (pVal < thr and below) or (pVal > thr and not below)
@@ -506,6 +646,34 @@ def downSample(aTrace, i):
 		return np.array(l)
 	else:
 		raise Exception('Only 1 and 2-dimensional arrays are allowed')
+
+def traceDeriv(aTrace, deriv=0):
+
+	"""
+	desc:
+		Gets the N-th derivative of a signal. Here, the 1st derivative is
+		velocity, the 2nd acceleration, etc.
+
+	arguments:
+		aTrace:
+			desc:	Input array.
+			type:	ndarray
+
+	keywords:
+		deriv:
+			desc:	The derivative.
+			type:	int
+
+	returns:
+		desc:	An array with the derivative.
+		type:	ndarray
+	"""
+
+	aTrace.dtype = np.float
+	while deriv > 0:
+		aTrace = aTrace[1:]-aTrace[:-1]
+		deriv -= 1
+	return aTrace
 
 def latency(aTrace, at=None, vt=None, plot=False):
 

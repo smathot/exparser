@@ -38,6 +38,7 @@ class RBridge(object):
 			stdin=subprocess.PIPE, stdout=subprocess.PIPE)
 		self.poll = select.poll()
 		self.poll.register(self.RProcess.stdout, select.POLLIN)
+		self.needDetach = False
 
 	def __del__(self):
 
@@ -250,6 +251,9 @@ class RBridge(object):
 		"""
 
 		dm.save('.rbridge.csv')
+		if self.needDetach:
+			self.write('detach(%s)' % frame)
+		self.needDetach = True
 		self.write('%s <- read.csv(".rbridge.csv")' % frame)
 		self.write('attach(%s)' % frame)
 
