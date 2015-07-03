@@ -20,6 +20,7 @@ along with exparser.  If not, see <http://www.gnu.org/licenses/>.
 import os
 import sys
 import time
+import pickle
 import numpy as np
 import shutil
 from exparser.DataMatrix import DataMatrix
@@ -99,6 +100,39 @@ def cachedDataMatrix(func):
 				cTime)
 			dm = DataMatrix(cachePath)
 		return dm
+
+	return inner
+
+def cachedPickle(func):
+
+	"""
+	A decorator function that provides a cache for functions that return
+	a pickable value.
+
+	Arguments:
+	func		--	A function.
+	"""
+
+	def inner(*args, **kwargs):
+
+		isCached = True
+		if 'cacheId' in kwargs:
+			cachePath = os.path.join(cacheFolder, kwargs['cacheId']) + '.pkl'
+			del kwargs['cacheId']
+		else:
+			cachePath = None
+		if skipCache or cachePath == None or not os.path.exists(cachePath):
+			a = func(*args, **kwargs)
+			if cachePath != None:
+				print '@cachedPickle: saving %s' % cachePath
+				with open(cachePath, u'w') as fd:
+					pickle.dump(a, fd)
+		else:
+			cTime = time.ctime(os.path.getctime(cachePath))
+			print '@cachedPickle: loading %s (created %s)' % (cachePath, cTime)
+			with open(cachePath, u'r') as fd:
+				a = pickle.load(fd)
+		return a
 
 	return inner
 

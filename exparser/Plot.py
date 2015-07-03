@@ -121,7 +121,7 @@ def save(name, folder=None, show=False, dpi=200):
 	pathPng = os.path.join(_plotFolder, 'png', '%s.png' % name)
 	plt.savefig(pathSvg)
 	plt.savefig(pathPng, dpi=dpi)
-	if show:
+	if show or '--show' in sys.argv:
 		plt.show()
 	else:
 		plt.clf()

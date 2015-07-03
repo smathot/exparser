@@ -556,12 +556,16 @@ class EyelinkAscFolderReader(BaseReader):
 		Attempts to parse a line (in list format) into a dictionary of sample
 		information. The expected format is:
 
-		# Timestamp x y pupil size ...
-		4815155   168.2   406.5  2141.0 ...
+			# Timestamp x y pupil size ...
+			4815155   168.2   406.5  2141.0 ...
 
-		or (during blinks)
-		661781	   .	   .	    0.0	...
+		or (during blinks):
 
+			661781	   .	   .	    0.0	...
+
+		or (elaborate format):
+
+			548367    514.0   354.5  1340.0 ...      -619.0  -161.0    88.9 ...CFT..R.BLR
 
 		Arguments:
 		l -- a list
@@ -571,7 +575,7 @@ class EyelinkAscFolderReader(BaseReader):
 		following keys: 'x', 'y', 'time'.
 		"""
 
-		if len(l) != 5:
+		if len(l) not in (5, 9):
 			return None
 		try:
 			sample = {}
@@ -612,8 +616,10 @@ class EyelinkAscFolderReader(BaseReader):
 		if len(l) != 8 or l[0] != "EFIX":
 			return None
 		fixation = {}
+		# EFIX R   1651574	1654007	2434	  653.3	  557.8	   4710
 		fixation["x"] = l[5] - self.driftAdjust[0]
 		fixation["y"] = l[6] - self.driftAdjust[1]
+		fixation['pupilSize'] = l[7]
 		fixation["sTime"] = l[2]
 		fixation["eTime"] = l[3]
 		fixation["duration"] = fixation['eTime'] - fixation['sTime']

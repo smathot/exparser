@@ -746,9 +746,9 @@ class DataMatrix(BaseMatrix):
 		for val in self.unique(key):
 			try:
 				float(val)
-				_dm = self.select('%s == %s' % (key, val))
+				_dm = self.select('%s == %s' % (key, val), verbose=False)
 			except:
-				_dm = self.select('%s == "%s"' % (key, val))
+				_dm = self.select('%s == "%s"' % (key, val), verbose=False)
 			l.append((val, _dm))
 		return l
 

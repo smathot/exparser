@@ -499,7 +499,7 @@ def mixedModelTrace(dm, model, winSize=1, effectIndex=1, **traceParams):
 						_dm['t'][j]])
 	return DataMatrix(l)
 
-def statsTrace(dm, key='t', intercept=False):
+def statsTrace(dm, key='t', intercept=False, show=True):
 
 	colors = brightColors[:]
 	for effect in dm.unique('effect'):
@@ -508,7 +508,8 @@ def statsTrace(dm, key='t', intercept=False):
 		_dm = dm.select('effect == "%s"' % effect)
 		plt.plot(_dm['t'], label=effect, color=colors.pop())
 	plt.legend(frameon=False)
-	plt.show()
+	if show:
+		plt.show()
 
 def markStats(ax, aStat, below=False, _abs=True, thr=2., minSmp=200,
 	color=gray[1], alpha=.2, loExt=False, hiExt=False, showSpurious=False,
