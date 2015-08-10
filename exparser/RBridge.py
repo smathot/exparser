@@ -219,7 +219,7 @@ class RBridge(object):
 			os.remove('.rbridge-lmer.csv')
 
 		# Peform lmer
-		self.write('library(lme4)')
+		self.write('library(lmerTest)')
 		s = self.call('(%s <- lmer(%s))' % (lmerVar, formula))
 		self.write('write.csv(summary(%s)$coef, ".rbridge-lmer.csv")' % \
 			lmerVar)
@@ -237,6 +237,37 @@ class RBridge(object):
 		dm.rename('Estimate', 'est')
 		dm.rename('Std. Error', 'se')
 		dm.rename('t value', 't')
+		dm.rename('Pr(>|t|)', 'p')
+		return dm
+
+	def glmer(self, formula, family, lmerVar='glmer1'):
+
+		if os.path.exists('.rbridge-glmer.csv'):
+			os.remove('.rbridge-glmer.csv')
+
+		# Peform lmer
+		self.write('library(lmerTest)')
+		s = self.call('(%s <- glmer(%s, family=%s))' \
+			% (lmerVar, formula, family))
+		self.write('write.csv(summary(%s)$coef, ".rbridge-glmer.csv")' % \
+			lmerVar)
+		while not os.path.exists('.rbridge-glmer.csv'):
+			time.sleep(.1)
+		# Try this a few times, because sometimes the csv hasn't been written
+		# yet
+		for i in range(10):
+			try:
+				dm = CsvReader('.rbridge-glmer.csv').dataMatrix()
+				break
+			except:
+				time.sleep(1)
+		dm.rename('f0', 'effect')
+		dm.rename('Estimate', 'est')
+		dm.rename('Std. Error', 'se')
+		dm.rename('Z value', 'z')
+		dm.rename('Pr(>|z|)', 'p')
+		dm = dm.addField('estProb', dtype=float)
+		dm['estProb'] = 1./(1.+np.exp(-dm['est']))
 		return dm
 
 	@cachedDataMatrix
@@ -263,31 +294,7 @@ class RBridge(object):
 			type:	DataMatrix
 		"""
 
-		if os.path.exists('.rbridge-glmer.csv'):
-			os.remove('.rbridge-glmer.csv')
-
-		# Peform lmer
-		self.write('library(lme4)')
-		s = self.call('(%s <- glmer(%s, family=binomial))' % (lmerVar, formula))
-		self.write('write.csv(summary(%s)$coef, ".rbridge-glmer.csv")' % \
-			lmerVar)
-		while not os.path.exists('.rbridge-glmer.csv'):
-			time.sleep(.1)
-		# Try this a few times, because sometimes the csv hasn't been written
-		# yet
-		for i in range(10):
-			try:
-				dm = CsvReader('.rbridge-glmer.csv').dataMatrix()
-				break
-			except:
-				time.sleep(1)
-		dm.rename('f0', 'effect')
-		dm.rename('Estimate', 'est')
-		dm.rename('Std. Error', 'se')
-		dm.rename('Z value', 'Z')
-		dm = dm.addField('estProb', dtype=float)
-		dm['estProb'] = 1./(1.+np.exp(-dm['est']))
-		return dm
+		return glmer(formula, 'binomial', lmerVar=lmerVar)
 
 	def load(self, dm, frame='data'):
 
