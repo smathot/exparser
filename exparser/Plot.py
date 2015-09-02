@@ -28,7 +28,7 @@ if '--clear-plot' in sys.argv and os.path.exists(plotFolder):
 	print 'Removing plot folder (%s)' % plotFolder
 	import shutil
 	shutil.rmtree(plotFolder)
-plt.rc('font', family='Arial', size=10)
+plt.rc('font', family='liberation sans', size=10)
 
 # Some pre-defined sizes
 xs = 4, 4
